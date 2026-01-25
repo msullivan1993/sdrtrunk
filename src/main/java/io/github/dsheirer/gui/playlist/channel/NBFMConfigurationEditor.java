@@ -47,6 +47,8 @@ import javafx.collections.ListChangeListener;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.TitledPane;
@@ -74,6 +76,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     private TextFormatter<Integer> mTalkgroupTextFormatter;
     private ToggleSwitch mBasebandRecordSwitch;
     private SegmentedButton mBandwidthButton;
+    private Spinner<Integer> mSquelchDelaySpinner;
+    private ToggleSwitch mRemoveSilenceSwitch;
 
     private SourceConfigurationEditor mSourceConfigurationEditor;
     private AuxDecoderConfigurationEditor mAuxDecoderConfigurationEditor;
@@ -148,7 +152,18 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             GridPane.setConstraints(getAudioFilterEnable(), 2, 1);
             gridPane.getChildren().add(getAudioFilterEnable());
 
-            GridPane.setConstraints(getRequireAliasMatchSwitch(), 2, 2);
+            Label delayLabel = new Label("Squelch Delay (ms)");
+            GridPane.setHalignment(delayLabel, HPos.RIGHT);
+            GridPane.setConstraints(delayLabel, 0, 2);
+            gridPane.getChildren().add(delayLabel);
+
+            GridPane.setConstraints(getSquelchDelaySpinner(), 1, 2);
+            gridPane.getChildren().add(getSquelchDelaySpinner());
+
+            GridPane.setConstraints(getRemoveSilenceSwitch(), 2, 2);
+            gridPane.getChildren().add(getRemoveSilenceSwitch());
+
+            GridPane.setConstraints(getRequireAliasMatchSwitch(), 2, 3);
             gridPane.getChildren().add(getRequireAliasMatchSwitch());
 
             mDecoderPane.setContent(gridPane);
@@ -273,6 +288,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
 
         return mAudioFilterEnable;
     }
+
     /**
      * Toggle switch for enable/disable requiring alias match for audio capture (tone squelch).
      * @return toggle switch.
@@ -338,6 +354,41 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         }
 
         return mBandwidthButton;
+    }
+
+    /**
+     * Spinner for squelch delay time in milliseconds.
+     * @return spinner control
+     */
+    private Spinner<Integer> getSquelchDelaySpinner()
+    {
+        if(mSquelchDelaySpinner == null)
+        {
+            mSquelchDelaySpinner = new Spinner<>();
+            mSquelchDelaySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 5000, 0, 100));
+            mSquelchDelaySpinner.setPrefWidth(100);
+            mSquelchDelaySpinner.setEditable(true);
+            mSquelchDelaySpinner.setTooltip(new Tooltip("Delay before closing audio segment after squelch closes (0-5000ms)"));
+            mSquelchDelaySpinner.valueProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+        }
+
+        return mSquelchDelaySpinner;
+    }
+
+    /**
+     * Toggle switch for removing silence during squelch delay period.
+     * @return toggle switch
+     */
+    private ToggleSwitch getRemoveSilenceSwitch()
+    {
+        if(mRemoveSilenceSwitch == null)
+        {
+            mRemoveSilenceSwitch = new ToggleSwitch("Remove Silence");
+            mRemoveSilenceSwitch.setTooltip(new Tooltip("Remove silence during delay period (uncheck to preserve timing)"));
+            mRemoveSilenceSwitch.selectedProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+        }
+
+        return mRemoveSilenceSwitch;
     }
 
     private TextField getTalkgroupField()
@@ -433,10 +484,20 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             getAudioFilterEnable().setSelected(decodeConfigNBFM.isAudioFilter());
             getRequireAliasMatchSwitch().setDisable(false);
             getRequireAliasMatchSwitch().setSelected(decodeConfigNBFM.isRequireAliasMatch());
+            getSquelchDelaySpinner().setDisable(false);
+            getSquelchDelaySpinner().getValueFactory().setValue(decodeConfigNBFM.getSquelchDelayTimeMs());
+            getRemoveSilenceSwitch().setDisable(false);
+            getRemoveSilenceSwitch().setSelected(decodeConfigNBFM.isSquelchDelayRemoveSilence());
         }
         else
         {
             getBandwidthButton().setDisable(true);
+            getRequireAliasMatchSwitch().setDisable(true);
+            getRequireAliasMatchSwitch().setSelected(false);
+            getSquelchDelaySpinner().setDisable(true);
+            getSquelchDelaySpinner().getValueFactory().setValue(0);
+            getRemoveSilenceSwitch().setDisable(true);
+            getRemoveSilenceSwitch().setSelected(true);
 
             for(Toggle toggle: getBandwidthButton().getToggleGroup().getToggles())
             {
@@ -483,6 +544,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         config.setTalkgroup(talkgroup);
         config.setAudioFilter(getAudioFilterEnable().isSelected());
         config.setRequireAliasMatch(getRequireAliasMatchSwitch().isSelected());
+        config.setSquelchDelayTimeMs(getSquelchDelaySpinner().getValue());
+        config.setSquelchDelayRemoveSilence(getRemoveSilenceSwitch().isSelected());
         getItem().setDecodeConfiguration(config);
     }
 

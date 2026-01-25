@@ -36,6 +36,8 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     private int mSquelchHysteresisOpenThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_OPEN_THRESHOLD;
     private int mSquelchHysteresisCloseThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_CLOSE_THRESHOLD;
     private boolean mRequireAliasMatch = false;
+    private int mSquelchDelayTimeMs = 0;
+    private boolean mSquelchDelayRemoveSilence = true;
 
     /**
      * Constructs an instance
@@ -190,7 +192,8 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
 
         mSquelchHysteresisCloseThreshold = close;
     }
-  /**
+
+    /**
      * Indicates if audio capture requires an alias match (tone squelch).
      * When enabled, audio is only captured when a detected tone/code matches a configured alias.
      * @return true if alias match is required
@@ -208,5 +211,49 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     public void setRequireAliasMatch(boolean requireAliasMatch)
     {
         mRequireAliasMatch = requireAliasMatch;
+    }
+
+    /**
+     * Squelch delay time in milliseconds (0-5000). Time to wait after squelch closes
+     * before ending the audio segment, allowing brief pauses in transmission.
+     * @return delay time in milliseconds
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "squelchDelayTimeMs")
+    public int getSquelchDelayTimeMs()
+    {
+        return mSquelchDelayTimeMs;
+    }
+
+    /**
+     * Sets the squelch delay time in milliseconds.
+     * @param delayTimeMs delay time (0-5000ms)
+     */
+    public void setSquelchDelayTimeMs(int delayTimeMs)
+    {
+        if(delayTimeMs < 0 || delayTimeMs > 5000)
+        {
+            throw new IllegalArgumentException("Squelch delay time must be between 0 and 5000ms: " + delayTimeMs);
+        }
+        mSquelchDelayTimeMs = delayTimeMs;
+    }
+
+    /**
+     * Indicates if silence should be removed during squelch delay period.
+     * When true, silence is removed. When false, silence is preserved in the recording.
+     * @return true to remove silence, false to preserve it
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "squelchDelayRemoveSilence")
+    public boolean isSquelchDelayRemoveSilence()
+    {
+        return mSquelchDelayRemoveSilence;
+    }
+
+    /**
+     * Sets whether silence should be removed during squelch delay period.
+     * @param removeSilence true to remove silence, false to preserve it
+     */
+    public void setSquelchDelayRemoveSilence(boolean removeSilence)
+    {
+        mSquelchDelayRemoveSilence = removeSilence;
     }
 }
