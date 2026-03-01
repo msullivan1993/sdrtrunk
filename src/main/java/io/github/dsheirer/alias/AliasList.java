@@ -563,14 +563,297 @@ public class AliasList
         return Collections.emptyList();
     }
 
+    /**
+     * Returns "Match All" aliases that match the identifier.
+     * This is used to collect candidate aliases that require all identifiers to match.
+     * 
+     * @param identifier to match against
+     * @return list of "Match All" aliases that match this identifier
+     */
+    public List<Alias> getMatchAllAliases(Identifier identifier)
+    {
+        if(identifier != null)
+        {
+            switch(identifier.getForm())
+            {
+                case TALKGROUP:
+                    TalkgroupIdentifier talkgroup = (TalkgroupIdentifier)identifier;
+                    TalkgroupAliasList talkgroupAliasList = mTalkgroupProtocolMap.get(identifier.getProtocol());
+                    if(talkgroupAliasList != null)
+                    {
+                        return toMatchAllList(talkgroupAliasList.getAlias(talkgroup));
+                    }
+                    break;
+                case RADIO:
+                    RadioIdentifier radio = (RadioIdentifier)identifier;
+                    RadioAliasList radioAliasList = mRadioProtocolMap.get(identifier.getProtocol());
+                    if(radioAliasList != null)
+                    {
+                        return toMatchAllList(radioAliasList.getAlias(radio));
+                    }
+                    break;
+                case TONE:
+                    if(identifier instanceof io.github.dsheirer.module.decode.ctcss.CTCSSIdentifier ctcssIdentifier)
+                    {
+                        CTCSSCode ctcssCode = ctcssIdentifier.getValue();
+                        if(ctcssCode != null)
+                        {
+                            return toMatchAllList(mCTCSSCodeAliasMap.get(ctcssCode));
+                        }
+                    }
+                    else if(identifier instanceof DCSIdentifier dcsIdentifier)
+                    {
+                        DCSCode dcsCode = dcsIdentifier.getValue();
+                        if(dcsCode != null)
+                        {
+                            return toMatchAllList(mDCSCodeAliasMap.get(dcsCode));
+                        }
+                    }
+                    else if(identifier instanceof ToneIdentifier toneIdentifier)
+                    {
+                        ToneSequence toneSequence = toneIdentifier.getValue();
+                        if(toneSequence != null && toneSequence.hasTones())
+                        {
+                            for(Map.Entry<ToneSequence,Alias> entry: mToneSequenceMap.entrySet())
+                            {
+                                if(entry.getKey().isContainedIn(toneSequence))
+                                {
+                                    return toMatchAllList(entry.getValue());
+                                }
+                            }
+                        }
+                    }
+                    break;
+            }
+        }
+        return Collections.emptyList();
+    }
+
+    /**
+     * Helper method that returns a list containing only the alias if it has matchAllIdentifiers=true.
+     */
+    private static List<Alias> toMatchAllList(Alias alias)
+    {
+        if(alias != null && alias.isMatchAllIdentifiers())
+        {
+            return Collections.singletonList(alias);
+        }
+        return Collections.emptyList();
+    }
+
     private static List<Alias> toList(Alias alias)
     {
-        if(alias != null)
+        if(alias != null && !alias.isMatchAllIdentifiers())
         {
             return Collections.singletonList(alias);
         }
 
         return Collections.emptyList();
+    }
+
+    /**
+     * Returns aliases that match the identifier collection, respecting the matchAllIdentifiers flag.
+     * For aliases with matchAllIdentifiers=true, ALL non-audio identifiers in the alias must be 
+     * present in the identifier collection for the alias to be returned.
+     * For aliases with matchAllIdentifiers=false (default), any single identifier match returns the alias.
+     * 
+     * @param identifierCollection to match against
+     * @return list of matching aliases
+     */
+    public List<Alias> getAliases(IdentifierCollection identifierCollection)
+    {
+        List<Alias> matchingAliases = new ArrayList<>();
+        
+        if(identifierCollection == null)
+        {
+            return matchingAliases;
+        }
+
+        // First, collect all aliases that match at least one identifier (OR logic)
+        Set<Alias> candidateAliases = new HashSet<>();
+        for(Identifier identifier : identifierCollection.getIdentifiers())
+        {
+            List<Alias> aliases = getAliases(identifier);
+            candidateAliases.addAll(aliases);
+        }
+
+        // Now filter based on matchAllIdentifiers flag
+        for(Alias alias : candidateAliases)
+        {
+            if(alias.isMatchAllIdentifiers())
+            {
+                // Check if ALL non-audio identifiers in the alias are present in the collection
+                if(allIdentifiersMatch(alias, identifierCollection))
+                {
+                    matchingAliases.add(alias);
+                }
+            }
+            else
+            {
+                // Default OR behavior - already matched at least one identifier
+                matchingAliases.add(alias);
+            }
+        }
+
+        return matchingAliases;
+    }
+
+    /**
+     * Checks if all non-audio identifiers in the alias are present in the identifier collection.
+     * 
+     * @param alias to check
+     * @param identifierCollection to match against
+     * @return true if all non-audio identifiers in the alias are found in the collection
+     */
+    private boolean allIdentifiersMatch(Alias alias, IdentifierCollection identifierCollection)
+    {
+        List<AliasID> nonAudioIds = alias.getNonAudioIdentifiers();
+        
+        if(nonAudioIds.isEmpty())
+        {
+            return false; // No identifiers to match
+        }
+
+        for(AliasID aliasID : nonAudioIds)
+        {
+            if(!identifierMatchesCollection(aliasID, identifierCollection))
+            {
+                return false; // At least one identifier doesn't match
+            }
+        }
+
+        return true; // All identifiers matched
+    }
+
+    /**
+     * Checks if a specific alias identifier matches any identifier in the collection.
+     * 
+     * @param aliasID to find
+     * @param identifierCollection to search
+     * @return true if the alias identifier matches an identifier in the collection
+     */
+    private boolean identifierMatchesCollection(AliasID aliasID, IdentifierCollection identifierCollection)
+    {
+        if(!aliasID.isValid())
+        {
+            return false;
+        }
+
+        switch(aliasID.getType())
+        {
+            case TALKGROUP:
+                Talkgroup talkgroup = (Talkgroup)aliasID;
+                for(Identifier id : identifierCollection.getIdentifiers())
+                {
+                    if(id instanceof TalkgroupIdentifier tgi)
+                    {
+                        if(id.getProtocol() == talkgroup.getProtocol() && tgi.getValue() == talkgroup.getValue())
+                        {
+                            return true;
+                        }
+                    }
+                }
+                break;
+            case TALKGROUP_RANGE:
+                TalkgroupRange talkgroupRange = (TalkgroupRange)aliasID;
+                for(Identifier id : identifierCollection.getIdentifiers())
+                {
+                    if(id instanceof TalkgroupIdentifier tgi)
+                    {
+                        if(id.getProtocol() == talkgroupRange.getProtocol() && talkgroupRange.contains(tgi.getValue()))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                break;
+            case RADIO_ID:
+                Radio radio = (Radio)aliasID;
+                for(Identifier id : identifierCollection.getIdentifiers())
+                {
+                    if(id instanceof RadioIdentifier ri)
+                    {
+                        if(id.getProtocol() == radio.getProtocol() && ri.getValue() == radio.getValue())
+                        {
+                            return true;
+                        }
+                    }
+                }
+                break;
+            case RADIO_ID_RANGE:
+                RadioRange radioRange = (RadioRange)aliasID;
+                for(Identifier id : identifierCollection.getIdentifiers())
+                {
+                    if(id instanceof RadioIdentifier ri)
+                    {
+                        if(id.getProtocol() == radioRange.getProtocol() && radioRange.contains(ri.getValue()))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                break;
+            case CTCSS:
+                if(aliasID instanceof io.github.dsheirer.alias.id.ctcss.Ctcss ctcss)
+                {
+                    for(Identifier id : identifierCollection.getIdentifiers())
+                    {
+                        if(id instanceof io.github.dsheirer.module.decode.ctcss.CTCSSIdentifier ctcssId)
+                        {
+                            if(ctcssId.getValue() == ctcss.getCTCSSCode())
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                break;
+            case DCS:
+                Dcs dcs = (Dcs)aliasID;
+                for(Identifier id : identifierCollection.getIdentifiers())
+                {
+                    if(id instanceof DCSIdentifier dcsId)
+                    {
+                        if(dcsId.getValue() == dcs.getDCSCode())
+                        {
+                            return true;
+                        }
+                    }
+                }
+                break;
+            case TONES:
+                TonesID tonesID = (TonesID)aliasID;
+                ToneSequence toneSequence = tonesID.getToneSequence();
+                if(toneSequence != null)
+                {
+                    for(Identifier id : identifierCollection.getIdentifiers())
+                    {
+                        if(id instanceof ToneIdentifier toneId)
+                        {
+                            if(toneSequence.isContainedIn(toneId.getValue()))
+                            {
+                                return true;
+                            }
+                        }
+                    }
+                }
+                break;
+            case ESN:
+                Esn esn = (Esn)aliasID;
+                for(Identifier id : identifierCollection.getIdentifiers())
+                {
+                    if(id instanceof ESNIdentifier esnId)
+                    {
+                        if(esn.getEsn() != null && esn.getEsn().equalsIgnoreCase(esnId.getValue()))
+                        {
+                            return true;
+                        }
+                    }
+                }
+                break;
+        }
+
+        return false;
     }
 
     /**

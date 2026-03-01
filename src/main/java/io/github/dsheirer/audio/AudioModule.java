@@ -54,6 +54,7 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
     private final boolean mSquelchDelayRemoveSilence;
     private ScheduledExecutorService mDelayExecutor;
     private ScheduledFuture<?> mPendingClose;
+    private boolean mHadAliasMatch = false;
 
     static
     {
@@ -171,9 +172,23 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
         if(mSquelchState == SquelchState.UNSQUELCH)
         {
             // If requireAliasMatch is enabled, only capture audio when an alias matches
-            if(mRequireAliasMatch && !getAliasList().hasAliasMatch(getIdentifierCollection()))
+            if(mRequireAliasMatch)
             {
-                return;
+                boolean hasMatch = getAliasList().hasAliasMatch(getIdentifierCollection());
+                
+                if(!hasMatch)
+                {
+                    // No match - if we previously had a match, close the segment
+                    if(mHadAliasMatch)
+                    {
+                        mHadAliasMatch = false;
+                        closeAudioSegment();
+                    }
+                    return;
+                }
+                
+                // We have a match
+                mHadAliasMatch = true;
             }
 
             if(mAudioFilterEnable)
@@ -191,10 +206,24 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
      */
     private void addSilence(int durationMs)
     {
-        // Calculate number of samples needed for the duration at 8kHz sample rate
-        int samples = (AUDIO_SAMPLE_RATE * durationMs) / 1000;
-        float[] silence = new float[samples];
-        addAudio(silence);
+        // Add silence in 100ms chunks at 8kHz sample rate (800 samples per chunk)
+        int chunkSize = 800; // 100ms at 8kHz
+        float[] silenceChunk = new float[chunkSize];
+        
+        int remainingMs = durationMs;
+        while(remainingMs >= 100)
+        {
+            addAudio(silenceChunk);
+            remainingMs -= 100;
+        }
+        
+        // Add any remaining partial chunk
+        if(remainingMs > 0)
+        {
+            int remainingSamples = (AUDIO_SAMPLE_RATE * remainingMs) / 1000;
+            float[] partialChunk = new float[remainingSamples];
+            addAudio(partialChunk);
+        }
     }
 
     @Override
@@ -209,6 +238,8 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
      */
     public class SquelchStateListener implements Listener<SquelchStateEvent>
     {
+        private long mSquelchClosedTimestamp = 0;
+
         @Override
         public void receive(SquelchStateEvent event)
         {
@@ -220,6 +251,10 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
 
                 if(mSquelchState == SquelchState.SQUELCH)
                 {
+                    // Record when squelch closed
+                    mSquelchClosedTimestamp = System.currentTimeMillis();
+                    mHadAliasMatch = false;
+
                     // If delay is configured, schedule the close; otherwise close immediately
                     if(mSquelchDelayTimeMs > 0 && mDelayExecutor != null)
                     {
@@ -234,11 +269,6 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
                             // Only close if still squelched
                             if(mSquelchState == SquelchState.SQUELCH)
                             {
-                                // If not removing silence, add silence for the delay period
-                                if(!mSquelchDelayRemoveSilence)
-                                {
-                                    addSilence(mSquelchDelayTimeMs);
-                                }
                                 closeAudioSegment();
                             }
                         }, mSquelchDelayTimeMs, TimeUnit.MILLISECONDS);
@@ -254,7 +284,20 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
                     if(mPendingClose != null && !mPendingClose.isDone())
                     {
                         mPendingClose.cancel(false);
+
+                        // If not removing silence, add silence for the time squelch was closed
+                        if(!mSquelchDelayRemoveSilence && mSquelchClosedTimestamp > 0)
+                        {
+                            long elapsedMs = System.currentTimeMillis() - mSquelchClosedTimestamp;
+                            // Round up to nearest 100ms to match delay increments
+                            int silenceDuration = (int)(((elapsedMs + 99) / 100) * 100);
+                            if(silenceDuration > 0 && silenceDuration <= mSquelchDelayTimeMs)
+                            {
+                                addSilence(silenceDuration);
+                            }
+                        }
                     }
+                    mSquelchClosedTimestamp = 0;
                 }
             }
         }

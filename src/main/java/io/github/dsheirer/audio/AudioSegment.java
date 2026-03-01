@@ -34,6 +34,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
@@ -83,6 +84,7 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
     private boolean mDisposing = false;
     private AudioSegment mLinkedAudioSegment;
     private int mTimeslot;
+    private Set<Alias> mMatchAllCandidates = new HashSet<>();
 
     /**
      * Constructs an instance
@@ -449,28 +451,80 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
             mEncrypted.set(eki.isEncrypted());
         }
 
+        // Process normal aliases (non-Match All)
         List<Alias> aliases = mAliasList.getAliases(identifier);
 
         for(Alias alias: aliases)
         {
-            if(alias.isRecordable())
-            {
-                mRecordAudio.set(true);
-            }
+            applyAliasProperties(alias);
+        }
 
-            //Add all broadcast channels for the alias ... let the set handle duplication.
-            mBroadcastChannels.addAll(alias.getBroadcastChannels());
+        // Collect "Match All" candidate aliases and check if they now fully match
+        collectMatchAllCandidates(identifier);
+        checkMatchAllCandidates();
+    }
 
-            //Only assign a playback priority if it is lower priority than the current setting.
-            int playbackPriority = alias.getPlaybackPriority();
+    /**
+     * Applies the alias properties (recording, streaming, priority) to this audio segment.
+     */
+    private void applyAliasProperties(Alias alias)
+    {
+        if(alias.isRecordable())
+        {
+            mRecordAudio.set(true);
+        }
 
-            if(playbackPriority < mMonitorPriority.get())
-            {
-                mMonitorPriority.set(playbackPriority);
-            }
+        //Add all broadcast channels for the alias ... let the set handle duplication.
+        mBroadcastChannels.addAll(alias.getBroadcastChannels());
+
+        //Only assign a playback priority if it is lower priority than the current setting.
+        int playbackPriority = alias.getPlaybackPriority();
+
+        if(playbackPriority < mMonitorPriority.get())
+        {
+            mMonitorPriority.set(playbackPriority);
         }
     }
 
+    /**
+     * Collects "Match All" aliases that match this identifier as candidates for later evaluation.
+     */
+    private void collectMatchAllCandidates(Identifier identifier)
+    {
+        if(mAliasList == null)
+        {
+            return;
+        }
+
+        // Get all aliases from the alias list that match this identifier, including "Match All" aliases
+        List<Alias> allMatchingAliases = mAliasList.getMatchAllAliases(identifier);
+        mMatchAllCandidates.addAll(allMatchingAliases);
+    }
+
+    /**
+     * Checks all "Match All" candidate aliases to see if all their identifiers are now present.
+     * If so, applies the alias properties.
+     */
+    private void checkMatchAllCandidates()
+    {
+        if(mAliasList == null || mMatchAllCandidates.isEmpty())
+        {
+            return;
+        }
+
+        Iterator<Alias> iterator = mMatchAllCandidates.iterator();
+        while(iterator.hasNext())
+        {
+            Alias candidate = iterator.next();
+            List<Alias> matches = mAliasList.getAliases(mIdentifierCollection);
+
+            if(matches.contains(candidate))
+            {
+                applyAliasProperties(candidate);
+                iterator.remove(); // Don't process this alias again
+            }
+        }
+    }
     /**
      * Indicates if this audio segment has been flagged as a duplicate audio call
      */
