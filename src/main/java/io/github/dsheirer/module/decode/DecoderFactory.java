@@ -439,9 +439,22 @@ public class DecoderFactory
         DecodeConfigNBFM decodeConfigNBFM = (DecodeConfigNBFM)decodeConfig;
         modules.add(new NBFMDecoder(decodeConfigNBFM));
         modules.add(new NBFMDecoderState(channel.getName(), decodeConfigNBFM));
-        modules.add(new AudioModule(aliasList, 0, 60000, decodeConfigNBFM.isAudioFilter(), decodeConfigNBFM.isRequireAliasMatch(),decodeConfigNBFM.getSquelchDelayTimeMs(), decodeConfigNBFM.isSquelchDelayRemoveSilence()));
-    }
+        modules.add(new AudioModule(aliasList, 0, 60000, decodeConfigNBFM.isAudioFilter(), decodeConfigNBFM.isRequireAliasMatch(), decodeConfigNBFM.getSquelchDelayTimeMs(), decodeConfigNBFM.isSquelchDelayRemoveSilence()));
 
+        // Add CTCSS decoder if a CTCSS tone is configured
+        if(decodeConfigNBFM.hasCtcssTone())
+        {
+            modules.add(new CTCSSDecoder());
+            modules.add(new CTCSSDecoderState());
+        }
+
+        // Add DCS decoder if a DCS code is configured
+        if(decodeConfigNBFM.hasDcsTone())
+        {
+            modules.add(new DCSDecoder());
+            modules.add(new DCSDecoderState());
+        }
+    }
     /**
      * Creates decoder modules for AM decoder
      * @param channel configuration

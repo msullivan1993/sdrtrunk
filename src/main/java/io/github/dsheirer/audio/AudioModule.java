@@ -55,7 +55,6 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
     private ScheduledExecutorService mDelayExecutor;
     private ScheduledFuture<?> mPendingClose;
     private boolean mHadAliasMatch = false;
-
     static
     {
         FIRFilterSpecification specification = FIRFilterSpecification.highPassBuilder()
