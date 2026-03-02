@@ -185,6 +185,7 @@ public class CTCSSDecoder extends Decoder implements IRealBufferListener, Listen
     @Override
     public void receive(float[] samples)
     {
+        
         if(getMessageListener() == null)
         {
             return;
