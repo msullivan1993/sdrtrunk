@@ -358,7 +358,7 @@ public class DecoderFactory
         // not create a new segment if the processing chain finishes a bit after
         // actual call timeout.
         long maxAudioSegmentLengthMillis = (callTimeoutMilliseconds + 5000);
-        modules.add(new AudioModule(aliasList, AbstractAudioModule.DEFAULT_TIMESLOT, maxAudioSegmentLengthMillis, filterList));
+        modules.add(new AudioModule(aliasList, AbstractAudioModule.DEFAULT_TIMESLOT, maxAudioSegmentLengthMillis, filterList, 0, true));
 
         SourceType sourceType = channel.getSourceConfiguration().getSourceType();
         if(sourceType == SourceType.TUNER || sourceType == SourceType.TUNER_MULTIPLE_FREQUENCIES)
@@ -462,7 +462,7 @@ public class DecoderFactory
             filterList.add(new AudioGainFilter(1, 10, 0.90f));
         }
 
-        modules.add(new AudioModule(aliasList, 0, 60000, filterList));
+        modules.add(new AudioModule(aliasList, 0, 60000, filterList, decodeConfigNBFM.getSquelchDelayTimeMs(), decodeConfigNBFM.isSquelchDelayRemoveSilence()));
     }
 
     /**
@@ -479,7 +479,7 @@ public class DecoderFactory
             modules.add(new AMDecoder(configAM));
             modules.add(new AMDecoderState(channel.getName(), configAM));
             List<AbstractAudioFilter> filterList = new ArrayList<>();   // no filtering for AM
-            modules.add(new AudioModule(aliasList, 0, 60000, filterList));
+            modules.add(new AudioModule(aliasList, 0, 60000, filterList, 0, true));
         }
         else
         {
