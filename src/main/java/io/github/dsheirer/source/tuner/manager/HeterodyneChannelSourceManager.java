@@ -228,6 +228,7 @@ public class HeterodyneChannelSourceManager extends ChannelSourceManager
             case NOTIFICATION_SAMPLE_RATE_CHANGE:
             case NOTIFICATION_FREQUENCY_AND_SAMPLE_RATE_LOCKED:
             case NOTIFICATION_FREQUENCY_AND_SAMPLE_RATE_UNLOCKED:
+            case NOTIFICATION_MEASURED_FREQUENCY_ERROR:
                 //no-op
                 break;
             default:
@@ -342,6 +343,9 @@ public class HeterodyneChannelSourceManager extends ChannelSourceManager
                     break;
                 case NOTIFICATION_CHANNEL_COUNT_CHANGE:
                     //Lock the tuner controller frequency & sample rate when we're processing channels
+                    break;
+                case REQUEST_FREQUENCY_CORRECTION:
+                    //Ignore
                     break;
                 default:
                     mLog.info("Unrecognized Source Event received from channel: " + sourceEvent);

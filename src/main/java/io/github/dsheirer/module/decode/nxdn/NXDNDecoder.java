@@ -131,8 +131,8 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
 
         int decimation = 1;
 
-        //Identify decimation that gets us as close to 4.0 Samples Per Symbol as possible
-        while(samplesPerSymbol > 8.0)
+        //Identify decimation that gets us as close to 5.0 Samples Per Symbol as possible
+        while(samplesPerSymbol >= 10.0)
         {
             decimation *= 2;
             samplesPerSymbol /= 2;

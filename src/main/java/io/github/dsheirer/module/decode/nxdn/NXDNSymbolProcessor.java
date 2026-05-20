@@ -571,29 +571,28 @@ public class NXDNSymbolProcessor
         {
             StringBuilder sb = new StringBuilder();
 
-            if(hasValidTiming())
+            if(isValid())
             {
-                if(isValid())
-                {
-                    sb.append("\tCORRECTION - Bit Errors [").append(mCorrectedBitCount).append("]");
-                }
-                else
-                {
-                    sb.append("CORRECTION - INVALID");
-                }
-
-                sb.append(" At Offset [").append(mAdditionalOffset);
-                sb.append("] Adjustments-Timing [").append(mTimingAdjustment);
-                sb.append("] Balance [").append(mBalanceAdjustment);
-                sb.append("] Gain [").append(mGainAdjustment);
-                sb.append("] Detect Score [").append(mDetectionScore);
-                sb.append("] Optimize Score [").append(mOptimizationScore);
-                sb.append("]");
+                sb.append("\tCORRECTION - Bit Errors [").append(mCorrectedBitCount).append("]");
             }
             else
             {
-                sb.append("Correction - INVALID TIMING");
+                sb.append("CORRECTION - INVALID");
             }
+
+            sb.append(" At Offset [").append(mAdditionalOffset);
+            sb.append("] Adjustments-Timing [").append(mTimingAdjustment);
+            sb.append("] Balance [").append(mBalanceAdjustment);
+            sb.append("] Gain [").append(mGainAdjustment);
+            sb.append("] Detect Score [").append(mDetectionScore);
+            sb.append("] Optimize Score [").append(mOptimizationScore);
+            sb.append("]");
+
+            if(!hasValidTiming())
+            {
+                sb.append(" >> INVALID TIMING");
+            }
+
             return sb.toString();
         }
 

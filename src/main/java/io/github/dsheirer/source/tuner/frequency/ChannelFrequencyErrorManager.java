@@ -128,19 +128,29 @@ public class ChannelFrequencyErrorManager implements ISourceEventListener, Liste
      */
     private void process()
     {
-        long partialCorrection = Math.clamp(mRemainingFrequencyError, -MAXIMUM_CHANNEL_ERROR_CORRECTION_PER_INTERVAL, MAXIMUM_CHANNEL_ERROR_CORRECTION_PER_INTERVAL);
-
-        if(partialCorrection != 0)
+        if(mCurrent)
         {
-            mAppliedFrequencyCorrection += partialCorrection;
-            mTunerChannelSource.setFrequencyCorrection(mAppliedFrequencyCorrection);
-            mRequestedCorrectAveragingBuffer.reset();
-        }
+            long partialCorrection = Math.clamp(mRemainingFrequencyError, -MAXIMUM_CHANNEL_ERROR_CORRECTION_PER_INTERVAL, MAXIMUM_CHANNEL_ERROR_CORRECTION_PER_INTERVAL);
 
-        ChannelFrequencyCorrectionStatusNotification notification = ChannelFrequencyCorrectionStatusNotification
-                .create(mTunerChannelSource, mRemainingFrequencyError, mAppliedFrequencyCorrection, mParent.getTunerPPM(),
-                mParent.getTunerFrequencyCorrection(), mParent.isEnabled());
-        mTunerChannelSource.broadcastConsumerSourceEvent(notification);
+            if(partialCorrection != 0)
+            {
+                mAppliedFrequencyCorrection += partialCorrection;
+                mTunerChannelSource.setFrequencyCorrection(mAppliedFrequencyCorrection);
+                mRequestedCorrectAveragingBuffer.reset();
+            }
+
+            ChannelFrequencyCorrectionStatusNotification notification = ChannelFrequencyCorrectionStatusNotification
+                    .create(mTunerChannelSource, mRemainingFrequencyError, mAppliedFrequencyCorrection, mParent.getTunerPPM(),
+                            mParent.getTunerFrequencyCorrection(), mParent.isEnabled());
+            mTunerChannelSource.broadcastConsumerSourceEvent(notification);
+        }
+        else
+        {
+            ChannelFrequencyCorrectionStatusNotification notification = ChannelFrequencyCorrectionStatusNotification
+                    .create(mTunerChannelSource, 0, mAppliedFrequencyCorrection, mParent.getTunerPPM(),
+                            mParent.getTunerFrequencyCorrection(), mParent.isEnabled());
+            mTunerChannelSource.broadcastConsumerSourceEvent(notification);
+        }
     }
 
     /**
