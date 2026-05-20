@@ -470,7 +470,10 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
                         mChannelCorrectionLabel.setEnabled(true);
                         mDecoderCorrectionLabel.setText(getPaddedLabel(LABEL_PREFIX_DECODER, status.getDecoderCorrection()));
                         mDecoderCorrectionLabel.setEnabled(true);
-                        mFrequencyOverlayPanel.setEstimatedCarrierOffsetFrequency(status.getDecoderCorrection());
+
+                        //We se the offset cursor line to negative so that it aligns with where the signal is located
+                        //instead of the correction that's needed to bring the signal to zero.
+                        mFrequencyOverlayPanel.setEstimatedCarrierOffsetFrequency(-status.getDecoderCorrection());
                     });
                 }
             }
