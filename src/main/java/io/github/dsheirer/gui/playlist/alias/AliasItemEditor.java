@@ -770,7 +770,7 @@ public class AliasItemEditor extends Editor<Alias>
             nxdnMenu.getItems().add(new AddTalkgroupRangeItem(Protocol.NXDN));
             nxdnMenu.getItems().add(new AddRadioIdItem(Protocol.NXDN));
             nxdnMenu.getItems().add(new AddRadioIdRangeItem(Protocol.NXDN));
-            dmrMenu.getItems().add(new AddTonesItem("AMBE Audio Tones"));
+            nxdnMenu.getItems().add(new AddTonesItem("AMBE Audio Tones"));
 
             Menu passportMenu = new ProtocolMenu(Protocol.PASSPORT);
             passportMenu.getItems().add(new AddTalkgroupItem(Protocol.PASSPORT));

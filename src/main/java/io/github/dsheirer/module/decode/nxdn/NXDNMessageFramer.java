@@ -96,7 +96,11 @@ public class NXDNMessageFramer
         }
     }
 
-    private void dispatchMessage()
+    /**
+     * Dispatches a currently assembling message once it's complete.
+     * @return true if any of the messages from the frame are valid.
+     */
+    private boolean dispatchMessage()
     {
         if(mMessageAssembler != null)
         {
@@ -108,15 +112,21 @@ public class NXDNMessageFramer
                 mLICHTracker.track(frame.getLICH());
             }
 
+            boolean validMessage = false;
+
             for(NXDNMessage message: frame.getMessages())
             {
+                validMessage |= message.isValid();
                 dispatch(message);
             }
 
             mSymbolsSinceLastSync -= 192;
+            mMessageAssembler = null;
+
+            return validMessage;
         }
 
-        mMessageAssembler = null;
+        return false;
     }
 
     /**
@@ -159,7 +169,7 @@ public class NXDNMessageFramer
      * Process hard symbol decision without sync detection.
      * @param symbol that was demodulated.
      */
-    public void process(Dibit symbol)
+    public boolean process(Dibit symbol)
     {
         accounting();
 
@@ -171,9 +181,11 @@ public class NXDNMessageFramer
 
             if(mMessageAssembler.isComplete())
             {
-                dispatchMessage();
+                return dispatchMessage();
             }
         }
+
+        return false;
     }
 
     public void accounting()

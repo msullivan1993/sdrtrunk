@@ -43,7 +43,6 @@ import io.github.dsheirer.source.wave.ComplexWaveSource;
 import java.io.File;
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.text.DecimalFormat;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -51,15 +50,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * NXDN Decoder
+ * NXDN Decoder for 4800, 9600 and Type-C/D systems.
  */
 public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider, IComplexSamplesListener,
         ISourceEventListener, Listener<ComplexSamples>
 {
     private static final Logger LOGGER = LoggerFactory.getLogger(NXDNDecoder.class);
-    private static final DecimalFormat DECIMAL_FORMAT = new DecimalFormat("#.##");
-    private static final Map<Double,float[]> BASEBAND_FILTERS = new HashMap<>();
-
+    private static final Map<String,float[]> BASEBAND_FILTERS = new HashMap<>();
     private final DecodeConfigNXDN mConfig;
     private final NXDNSymbolProcessor mSymbolProcessor;
     private final NXDNMessageFramer mMessageFramer;
@@ -88,11 +85,6 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
         mMessageProcessor.setMessageListener(getMessageListener());
         mMessageFramer = new NXDNMessageFramer(mMessageProcessor, config.getTransmissionMode());
         mSymbolProcessor = new NXDNSymbolProcessor(mMessageFramer, this);
-    }
-
-    public void log()
-    {
-        mSymbolProcessor.log();
     }
 
     /**
@@ -137,8 +129,6 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
             decimation *= 2;
             samplesPerSymbol /= 2;
         }
-
-//        System.out.println("Decimated Sample Rate: " + (sampleRate / decimation));
 
         mDecimationFilterI = DecimationFilterFactory.getRealDecimationFilter(decimation);
         mDecimationFilterQ = DecimationFilterFactory.getRealDecimationFilter(decimation);
@@ -187,26 +177,40 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
      */
     private float[] getBasebandFilter(double sampleRate, DecodeConfigNXDN config)
     {
-        ChannelSpecification channel = config.getChannelSpecification();
 
-        FIRFilterSpecification specification = FIRFilterSpecification
-                .lowPassBuilder()
-                .sampleRate(sampleRate)
-                .passBandCutoff(channel.getPassFrequency())
-                .passBandAmplitude(1.0).passBandRipple(0.01)
-                .stopBandAmplitude(0.0).stopBandStart(channel.getStopFrequency())
-                .stopBandRipple(0.01).build();
+        String mapKey = config.getTransmissionMode().name() + sampleRate;
 
         float[] coefficients = null;
 
-
-        try
+        if(BASEBAND_FILTERS.containsKey(mapKey))
         {
-            coefficients = FilterFactory.getTaps(specification);
+            coefficients = BASEBAND_FILTERS.get(mapKey);
         }
-        catch(Exception fde) //FilterDesignException
+        else
         {
-            System.out.println("Error");
+            ChannelSpecification channel = config.getChannelSpecification();
+
+            FIRFilterSpecification specification = FIRFilterSpecification
+                    .lowPassBuilder()
+                    .sampleRate(sampleRate)
+                    .passBandCutoff(channel.getPassFrequency())
+                    .passBandAmplitude(1.0).passBandRipple(0.01)
+                    .stopBandAmplitude(0.0).stopBandStart(channel.getStopFrequency())
+                    .stopBandRipple(0.01).build();
+
+            try
+            {
+                coefficients = FilterFactory.getTaps(specification);
+
+                if(coefficients != null)
+                {
+                    BASEBAND_FILTERS.put(mapKey, coefficients);
+                }
+            }
+            catch(Exception fde) //FilterDesignException
+            {
+                System.out.println("Error");
+            }
         }
 
         if(coefficients == null)

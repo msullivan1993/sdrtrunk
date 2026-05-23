@@ -251,7 +251,10 @@ public class NXDNSymbolProcessor
                         getSyncResultsViewer().symbol(softSymbol);
                     }
 
-                    mMessageFramer.process(symbol);
+                    if(mMessageFramer.process(symbol))
+                    {
+                        mFeedbackDecoder.processPLLError(mSampleEqualizer.balance());
+                    }
 
                     //We delay sending the symbol to the dibit assembler so that we have a chance to fully correct
                     //detected sync patterns in the delay buffer before they are sent downstream for recording.  This
@@ -606,34 +609,6 @@ public class NXDNSymbolProcessor
         }
 
         /**
-         * Additional offset adjustment based on the location of the triggering sync detector.  The primary sync
-         * detector has no additional offset, but a lagging sync detector has a lagging offset.
-         * @return addtional offset from lagging sync detector.
-         */
-        public double getAdditionalOffset()
-        {
-            return mAdditionalOffset;
-        }
-
-        /**
-         * Original sync detection score.
-         * @return score
-         */
-        public float getDetectionScore()
-        {
-            return mDetectionScore;
-        }
-
-        /**
-         * Timing optimization score.
-         * @return score
-         */
-        public float getOptimizationScore()
-        {
-            return mOptimizationScore;
-        }
-
-        /**
          * Equalizer balance correction value.
          * @return correction
          */
@@ -649,15 +624,6 @@ public class NXDNSymbolProcessor
         public float getGainAdjustment()
         {
             return mGainAdjustment;
-        }
-
-        /**
-         * Adds to the bit error count with the number of bit errors corrected in the NID by the BCH decoder
-         * @param correctedBitCount for the corrected NID
-         */
-        public void addCorrectedBitCount(int correctedBitCount)
-        {
-            mCorrectedBitCount += correctedBitCount;
         }
 
         /**
@@ -707,18 +673,27 @@ public class NXDNSymbolProcessor
         private float mGainMin = 5.2f;
 
         /**
+         * Current balance that represents a traditional PLL signal offset value.
+         * @return balance.
+         */
+        public float balance()
+        {
+            return mBalance;
+        }
+
+        /**
          * Updates the initial, min and max gain values from the samples per symbol
          * @param samplesPerSymbol for the incoming stream
          */
         public void configure(double samplesPerSymbol)
         {
-//            System.out.println("Equalizer is configuring for: " + samplesPerSymbol);
             float ratio = (float)samplesPerSymbol / 5.208f;
             float gain = 5.7f * ratio;
             mGainInitial = gain;
             mGain = gain;
             mGainMax = gain + 0.5f;
             mGainMin = gain - 0.5f;
+            System.out.println("SPS: " + samplesPerSymbol + " Gain - Ratio:" + ratio + " Initial: " + mGainInitial + " Min:" + mGainMin + " Max:" + mGainMax + " Gain" + mGain);
         }
 
         /**
@@ -998,7 +973,6 @@ public class NXDNSymbolProcessor
          */
         public void apply(Correction correction)
         {
-//            System.out.println("Applying [" + mDebugSampleCounter + "] Correction: " + correction);
             float remainingBalanceToCorrect = correction.getBalanceAdjustment() - mBalance;
 
             //Re-initialize the equalizer any time the balance correction value exceeds the threshold.
@@ -1023,8 +997,6 @@ public class NXDNSymbolProcessor
 
             mBalance = Math.min(mBalance, EQUALIZER_MAXIMUM_BALANCE);
             mBalance = Math.max(mBalance, -EQUALIZER_MAXIMUM_BALANCE);
-            mFeedbackDecoder.processPLLError(mBalance); //TODO: fixme
-
             mGain = Math.min(mGain, mGainMax);
             mGain = Math.max(mGain, mGainMin);
         }

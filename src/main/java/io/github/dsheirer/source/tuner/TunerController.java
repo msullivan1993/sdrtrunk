@@ -355,19 +355,7 @@ public abstract class TunerController implements Tunable, ISourceEventProcessor,
 
     public double getFrequencyCorrection()
     {
-        double correction;
-
-        try
-        {
-            getLock().lock();
-            correction = mFrequencyController.getFrequencyCorrection();
-        }
-        finally
-        {
-            getLock().unlock();
-        }
-
-        return correction;
+        return mFrequencyController.getFrequencyCorrection();
     }
 
     public void setFrequencyCorrection(double correction) throws SourceException
