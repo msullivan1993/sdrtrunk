@@ -20,12 +20,18 @@
 package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
 import io.github.dsheirer.dsp.symbol.Dibit;
+import java.util.Map;
+import java.util.TreeMap;
+import org.apache.commons.math3.analysis.interpolation.SplineInterpolator;
+import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
 
 /**
  * Base implementation of NXDN sync detector.
  */
 public abstract class NXDNSyncDetector
 {
+    private static Map<Integer,ReferenceSyncWaveform> sReferenceWaveformMap = new TreeMap<>();
+
     /**
      * Sync pattern length in dibits.
      */
@@ -88,5 +94,66 @@ public abstract class NXDNSyncDetector
         }
 
         return symbols;
+    }
+
+    /**
+     * Creates a reference waveform representation of the sync pattern that can be used to correlate against a
+     * candidate detected sync waveform to discriminate between a valid and invalid sync detection.  The generated
+     * waveform will be aligned where the final sample is time-aligned to the final symbol.
+     *
+     * @param samplesPerSymbol count
+     * @return a reference waveform and ideal correlation score.
+     */
+    public ReferenceSyncWaveform getReferenceWaveform(double samplesPerSymbol)
+    {
+        int key = (int)(samplesPerSymbol * 1000.0);
+
+        if(sReferenceWaveformMap.containsKey(key))
+        {
+            return sReferenceWaveformMap.get(key);
+        }
+
+        float[] symbols = getSyncSymbols();
+        int sampleCount = (int)Math.ceil(samplesPerSymbol * (symbols.length - 1)) + 1;
+        float[] samples = new float[sampleCount];
+        double sampleInterval = 1.0 / samplesPerSymbol;
+
+        double[] x = new double[symbols.length + 2];
+        double[] y = new double[symbols.length + 2];
+
+        for(int i = -1; i < x.length - 1; i++)
+        {
+            x[i + 1] = i;
+
+            if(0 <= i && i < symbols.length)
+            {
+                y[i + 1] = symbols[i];
+            }
+        }
+
+        double start = symbols.length - 1;
+        int samplePointer = sampleCount - 1;
+        SplineInterpolator interpolator = new SplineInterpolator();
+        PolynomialSplineFunction function = interpolator.interpolate(x, y);
+
+        float accumulator = 0;
+        float sample;
+        float max = 0;
+        while(samplePointer >= 0)
+        {
+            sample = (float)function.value(start);
+
+            if(Math.abs(sample) > max)
+            {
+                max = Math.abs(sample);
+            }
+            samples[samplePointer--] = sample;
+            accumulator += sample * sample;
+            start -= sampleInterval;
+        }
+
+        ReferenceSyncWaveform referenceWaveform = new ReferenceSyncWaveform(samples, accumulator, max);
+        sReferenceWaveformMap.put(key, referenceWaveform);
+        return referenceWaveform;
     }
 }

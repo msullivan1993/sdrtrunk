@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -46,5 +46,14 @@ public class NXDNStandardHardSyncDetector extends NXDNStandardSyncDetector
     {
         mValue = (Long.rotateLeft(mValue, 2) & STANDARD_SYNC_MASK) + dibit.getValue();
         return Long.bitCount(mValue ^ STANDARD_SYNC_PATTERN) <= MAXIMUM_BIT_ERROR;
+    }
+
+
+    /**
+     * Bit error count when comparing the current buffer contents to the known sync pattern.
+     */
+    public int getCurrentBitErrors()
+    {
+        return Long.bitCount(mValue ^ STANDARD_SYNC_PATTERN);
     }
 }

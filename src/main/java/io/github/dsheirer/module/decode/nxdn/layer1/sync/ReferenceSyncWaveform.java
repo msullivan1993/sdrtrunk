@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,30 +17,12 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.nxdn.sync.control;
+package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
 /**
- * Scalar implementation of long control soft sync detector.
+ * Waveform representing the ideal sync pattern, resampled at the sample rate.
+ * @param waveform in samples
+ * @param idealCorrelationScore as dot-product of the ideal multiplied by itself.
+ * @param maxSample maximum allowable sample value
  */
-public class NXDNControlSoftSyncDetectorScalar extends NXDNControlSoftSyncDetector
-{
-    /**
-     * Processes the demodulated soft symbol value and returns a correlation value against the preceding 24 soft
-     * symbols that include this recent soft symbol.
-     *
-     * @return correlation score.
-     */
-    public float calculate()
-    {
-        float symbol;
-        float score = 0;
-
-        for(int x = 0; x < 22; x++)
-        {
-            symbol = mSymbols[mSymbolPointer + x];
-            score += SYMBOLS[x] * symbol;
-        }
-
-        return score;
-    }
-}
+public record ReferenceSyncWaveform(float[] waveform, float idealCorrelationScore, float maxSample){};

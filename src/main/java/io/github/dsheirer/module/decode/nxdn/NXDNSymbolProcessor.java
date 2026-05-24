@@ -29,6 +29,7 @@ import io.github.dsheirer.module.decode.FeedbackDecoder;
 import io.github.dsheirer.module.decode.nxdn.layer1.C4FMEqualizer;
 import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSyncDetector;
 import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSyncDetectorFactory;
+import io.github.dsheirer.module.decode.nxdn.layer1.sync.ReferenceSyncWaveform;
 import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardSoftSyncDetector;
 import io.github.dsheirer.sample.Listener;
 import java.nio.ByteBuffer;
@@ -81,9 +82,9 @@ public class NXDNSymbolProcessor
     private boolean mSynchronized = false;
     private boolean mDelayedSyncDetectionTriggerPending = false;
     private int mDelayedSyncDetectionSymbolsRemaining = 0;
-
+    private ReferenceSyncWaveform mReferenceSyncWaveform;
     private final boolean mVisualize = false;
-    private final int mDebugSymbolStart = 202000; //1890 is actual start of modulation
+    private final int mDebugSymbolStart = 130000; //1890 is actual start of modulation
     private static final DecimalFormat DF = new DecimalFormat("00.000");
 
 
@@ -262,6 +263,12 @@ public class NXDNSymbolProcessor
                     //when possible.
                     mDibitAssembler.receive(mSymbolDelayLine.insert(symbol));
 
+                    //Do a final validation against the reference sync waveform
+                    if(correctionCandidate.isValid())
+                    {
+                        correctionCandidate = validateSyncWaveform(correctionCandidate, bufferPointer, samplePoint);
+                    }
+
                     if(correctionCandidate.isValid())
                     {
                         mSampleEqualizer.apply(correctionCandidate);
@@ -283,9 +290,30 @@ public class NXDNSymbolProcessor
                         }
 
                         mDelayedSyncDetectionTriggerPending = true;
-                        mDelayedSyncDetectionSymbolsRemaining = mSymbolEqualizer.getDelay();
+                        mDelayedSyncDetectionSymbolsRemaining = mSymbolEqualizer.getDelaySymbolCount();
                         mSynchronized = true;
                         symbolsSinceLastSync = 0;
+
+                        //If the equalizer was disabled, it has misaligned samples contaminating the training buffer and
+                        // we need to prime that buffer with aligned samples prior to training.
+                        if(!mSymbolEqualizer.isEnabled())
+                        {
+                            int symbols = mSyncDetector.getSyncSymbols().length + mSymbolEqualizer.getLength() - mSymbolEqualizer.getDelaySymbolCount();
+                            double offset = bufferPointer + samplePoint - ((symbols - 1) * samplesPerSymbol) - mLaggingSyncOffset;
+
+                            float mid, sym;
+                            for(int s = 0; s < symbols; s++)
+                            {
+                                //Mid symbol
+
+                                mid = mSampleEqualizer.getEqualizedSymbol(offset);
+                                offset += mLaggingSyncOffset;
+                                sym = mSampleEqualizer.getEqualizedSymbol(offset);
+                                offset += mLaggingSyncOffset;
+                                mSymbolEqualizer.process(mid, sym);
+                            }
+                        }
+
                         mSymbolEqualizer.syncDetected();
                         mSymbolEqualizer.enable();
                         mSymbolDelayLine.update(mSyncDetector.getSyncDibits());
@@ -312,6 +340,40 @@ public class NXDNSymbolProcessor
         mBufferPointer = bufferPointer;
         mSamplePoint = samplePoint;
         mSymbolsSinceLastSync = symbolsSinceLastSync;
+    }
+
+    private Correction validateSyncWaveform(Correction correction, int bufferPointer, double samplePoint)
+    {
+        float gain = mSampleEqualizer.mGain + correction.getGainAdjustment();
+        float balance = mSampleEqualizer.mBalance + correction.getBalanceAdjustment();
+
+        double offset = bufferPointer + samplePoint + correction.getTimingCorrection() - mReferenceSyncWaveform.waveform().length;
+        int integral = (int)Math.ceil(offset);
+        double mu = integral - offset;
+        double accumulator = 0.0;
+        int index;
+
+        for(int x = mReferenceSyncWaveform.waveform().length - 1; x >= 0; x--)
+        {
+            index = integral + x;
+            float sample = LinearInterpolator.calculate(mBuffer[index], mBuffer[index + 1], mu);
+            sample += balance;
+            sample *= gain;
+            sample = Math.clamp(sample, -mReferenceSyncWaveform.maxSample(), mReferenceSyncWaveform.maxSample());
+            accumulator += mReferenceSyncWaveform.waveform()[x] * sample;
+        }
+
+        double threshold = mReferenceSyncWaveform.idealCorrelationScore() * 0.88;
+
+
+        if(accumulator > threshold)
+        {
+//            System.out.println("Sync Waveform Correlation Score: " + accumulator + " Threshold: " + threshold);
+            return correction;
+        }
+
+//        System.out.println("Sync Waveform Correlation Score: " + accumulator + " Threshold: " + threshold + " <<<<<<< INVALID - REJECTED SYNC DETECTION");
+        return INVALID_SYNC_DETECTION;
     }
 
     /**
@@ -350,6 +412,7 @@ public class NXDNSymbolProcessor
         mBufferReloadThreshold = mBuffer.length - (int)Math.ceil(samplesPerSymbol * (DIBIT_LENGTH_NID + 1));
         mBufferPointer = mBufferReloadThreshold;
         mSampleEqualizer.configure(samplesPerSymbol);
+        mReferenceSyncWaveform = mSyncDetector.getReferenceWaveform(samplesPerSymbol);
     }
 
     /**
@@ -879,6 +942,23 @@ public class NXDNSymbolProcessor
         }
 
         /**
+         * Gets the interpolated sample value at the specified offset and equalizes it with the current equalizer settings.
+         * @param offset to the sample
+         * @return equalized value.
+         */
+        public float getEqualizedSymbol(double offset)
+        {
+            int integral = (int)Math.floor(offset);
+
+            if(integral >= 0)
+            {
+                return getEqualizedSymbol(mBuffer[integral], mBuffer[integral + 1], offset - integral);
+            }
+
+            return 0;
+        }
+
+        /**
          * Equalizes both samples using the candidate correction values and returns the interpolated value at the
          * mu offset.
          * @param sample1 to equalize
@@ -1040,10 +1120,7 @@ public class NXDNSymbolProcessor
             if(!mSynchronized)
             {
                 double optimizedFinalSymbol = offset + additionalOffset + timingCorrection;
-//                balanceCorrection = -getBalance(offset + timingCorrection);
                 balanceCorrection = -getBalance(optimizedFinalSymbol);
-//                optimizationScore = score(syncDetector, offset + timingCorrection, mSamplesPerSymbol,
-//                        balanceCorrection, mGain + gainAccumulator);
                 optimizationScore = score(syncDetector, optimizedFinalSymbol, mSamplesPerSymbol,
                         balanceCorrection, mGain + gainAccumulator);
             }

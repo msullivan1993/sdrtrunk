@@ -127,7 +127,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
 
                 for(ChannelFrequencyErrorManager manager : mChannelManagers)
                 {
-                    if(manager.isCurrent())
+                    if(manager.isCurrentForTunerProcessing())
                     {
                         requestedChangeHz += manager.getFrequencyError();
                         count++;

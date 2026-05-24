@@ -39,42 +39,39 @@ public class C4FMEqualizer
     private final float[] mBuffer;
     private float[] mTaps;
     private boolean mEnabled = false;
-    private int mDelay = 0;
-    private int mProcessingDelay = 0;
-    private int mSyncDelay;
+    private int mCenterTap = 0;
+    private int mDelaySymbolCount;
     private Variance mVariance = new Variance();
     private float[] mTrainingSnapshot;
-    private float[] mSyncSymbols;
+    private float[] mReversedSyncSymbols;
     private boolean mSyncDetected = false;
     private int mTrainingSymbolsRemaining = 0;
     private boolean mDynamicTapUpdates = false;
-    private int mTrainingCount = 0;
 
     /**
      * Constructs an instance
      *
-     * @param tapCount for the equalizer, odd length.
+     * @param symbolLength for the equalizer, odd length.  Note: if the argument is not odd valued,
+     * the symbol count will be increased to make it odd length.
      */
-    public C4FMEqualizer(float[] syncSymbols, int tapCount)
+    public C4FMEqualizer(float[] syncSymbols, int symbolLength)
     {
-        mSyncSymbols = new float[syncSymbols.length];
         //Store the sync pattern in reverse order
+        mReversedSyncSymbols = new float[syncSymbols.length];
         for(int x = 0; x < syncSymbols.length; x++)
         {
-            mSyncSymbols[syncSymbols.length - x - 1] = syncSymbols[x];
+            mReversedSyncSymbols[syncSymbols.length - x - 1] = syncSymbols[x];
         }
 
-        //Make the tap count odd length for equal delay on either side of the main tap
-        tapCount = (tapCount % 2 == 1) ? tapCount : tapCount + 1;
-        mDelay = tapCount; //Use tap count as delay before we double it
-        mProcessingDelay = tapCount / 2;
-        mSyncDelay = tapCount / 2; //Symbol countdown from sync detection to sync symbols centered in the buffer
-        tapCount *= 2;
-        mTaps = new float[tapCount];
-        mTaps[mDelay] = 1.0f; //Center tap
-        mTrainingSnapshot = Arrays.copyOf(mTaps, tapCount);
+        //Make the symbol count odd length for equal delay on either side of the center tap
+        symbolLength = (symbolLength % 2 == 1) ? symbolLength : symbolLength + 1;
+        mCenterTap = symbolLength; //This works since we're going to double the buffer length
+        mDelaySymbolCount = symbolLength / 2; //Delay until new symbol is aligned to center tap
+        mTaps = new float[symbolLength * 2];
+        mTaps[mCenterTap] = 1.0f;
+        mTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
         DF.setPositivePrefix(" ");
-        int bufferLength = mSyncSymbols.length * 2 + mTaps.length - 2;
+        int bufferLength = mReversedSyncSymbols.length * 2 + mTaps.length - 2;
         mBuffer = new float[bufferLength];
     }
 
@@ -82,9 +79,19 @@ public class C4FMEqualizer
      * Symbol processing delay.
      * @return processing delay in symbols.
      */
-    public int getDelay()
+    public int getDelaySymbolCount()
     {
-        return mProcessingDelay;
+        return mDelaySymbolCount;
+    }
+
+    /**
+     * Length of the equalizer in symbols.  Note: the internal tap count is twice as long since this
+     * is a fractional (x2) equalizer.
+     * @return length in symbols.
+     */
+    public int getLength()
+    {
+        return mTaps.length / 2;
     }
 
     /**
@@ -93,6 +100,15 @@ public class C4FMEqualizer
     public void enable()
     {
         mEnabled = true;
+    }
+
+    /**
+     * Indicates the enabled state.
+     * @return enabled state
+     */
+    public boolean isEnabled()
+    {
+        return mEnabled;
     }
 
     /**
@@ -110,7 +126,7 @@ public class C4FMEqualizer
     public void syncDetected()
     {
         mSyncDetected = true;
-        mTrainingSymbolsRemaining = mSyncDelay;
+        mTrainingSymbolsRemaining = mDelaySymbolCount;
     }
 
     public void syncLost()
@@ -174,7 +190,7 @@ public class C4FMEqualizer
         else
         {
             //Return the uncorrected, delayed symbol when we're disabled
-            equalized = mBuffer[mDelay];
+            equalized = mBuffer[mCenterTap];
         }
 
         return equalized;
@@ -191,7 +207,7 @@ public class C4FMEqualizer
         mSyncDetected = false;
 
         //Ensure we've collected enough variance samples in the buffer and we have sufficient variance
-        if(mVariance.getN() <= mSyncDelay || mVariance.getResult() > TRAINING_SKIP_THRESHOLD)
+        if(mVariance.getN() <= mDelaySymbolCount || mVariance.getResult() > TRAINING_SKIP_THRESHOLD)
         {
             //If the current variance tracked since the last training session using dynamic tap adjustments at each
             // symbol is excessive, fallback to the most recent training snapshot as a better starting point
@@ -210,7 +226,7 @@ public class C4FMEqualizer
                 previousVariance = variance.getN() == 0 ? 20.0 : variance.getResult();
                 variance.clear();
 
-                for(symbolIndex = 0; symbolIndex < mSyncSymbols.length; symbolIndex++)
+                for(symbolIndex = 0; symbolIndex < mReversedSyncSymbols.length; symbolIndex++)
                 {
                     accumulator = 0.0f;
                     for(index = 0; index < mTaps.length; index++)
@@ -218,7 +234,7 @@ public class C4FMEqualizer
                         accumulator += mTaps[index] * mBuffer[index + (2 * symbolIndex)];
                     }
 
-                    error = mSyncSymbols[symbolIndex] - accumulator;
+                    error = mReversedSyncSymbols[symbolIndex] - accumulator;
                     variance.increment(error);
 
                     //Step size (mu) in range 0.0001 to 0.01
@@ -250,7 +266,7 @@ public class C4FMEqualizer
                 mDynamicTapUpdates = false;
             }
         }
-        else if(mVariance.getN() >= mSyncDelay && mVariance.getResult() < TRAINING_SKIP_THRESHOLD)
+        else if(mVariance.getN() >= mDelaySymbolCount && mVariance.getResult() < TRAINING_SKIP_THRESHOLD)
         {
             //Snapshot the current taps as the training sequence
             mTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
@@ -266,6 +282,6 @@ public class C4FMEqualizer
     private void reset()
     {
         Arrays.fill(mTaps, 0f);
-        mTaps[mDelay] = 1.0f;
+        mTaps[mCenterTap] = 1.0f;
     }
 }

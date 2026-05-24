@@ -42,8 +42,9 @@ public class ChannelFrequencyErrorManager implements ISourceEventListener, Liste
     private final TunerFrequencyErrorManager mParent;
     private ScheduledFuture<?> mScheduledFuture;
     private long mAppliedFrequencyCorrection = 0;
-    private long mRemainingFrequencyError = 0;
-    private boolean mCurrent = false;
+    private long mAverageRequestedCorrection = 0;
+    private boolean mCurrentForTunerProcessing = false;
+    private boolean mCurrentForChannelProcessing = false;
 
     /**
      * Constructs an instance.
@@ -68,12 +69,12 @@ public class ChannelFrequencyErrorManager implements ISourceEventListener, Liste
     }
 
     /**
-     * Snapshot of the current applied frequency correction and the remaining frequency error reported by the decoder.
+     * Snapshot of the current applied frequency correction for the channel.
      * @return total frequency error in Hertz.
      */
     public long getFrequencyError()
     {
-        return mAppliedFrequencyCorrection + mRemainingFrequencyError;
+        return mAppliedFrequencyCorrection;
     }
 
     /**
@@ -99,8 +100,8 @@ public class ChannelFrequencyErrorManager implements ISourceEventListener, Liste
         if(sourceEvent.getEvent().equals(SourceEvent.Event.REQUEST_FREQUENCY_CORRECTION))
         {
             long requestedCorrection = sourceEvent.getValue().longValue();
-            mRemainingFrequencyError = (long) mRequestedCorrectAveragingBuffer.get(requestedCorrection);
-            mCurrent = true;
+            mAverageRequestedCorrection = (long) mRequestedCorrectAveragingBuffer.get(requestedCorrection);
+            mCurrentForChannelProcessing = true;
         }
     }
 
@@ -109,9 +110,9 @@ public class ChannelFrequencyErrorManager implements ISourceEventListener, Liste
      * flag was cleared, when the last error measurement was read.
      * @return true if there is current error value available.
      */
-    public boolean isCurrent()
+    public boolean isCurrentForTunerProcessing()
     {
-        return mCurrent;
+        return mCurrentForTunerProcessing;
     }
 
     /**
@@ -119,7 +120,7 @@ public class ChannelFrequencyErrorManager implements ISourceEventListener, Liste
      */
     public void clearCurrentFlag()
     {
-        mCurrent = false;
+        mCurrentForTunerProcessing = false;
     }
 
     /**
@@ -128,9 +129,9 @@ public class ChannelFrequencyErrorManager implements ISourceEventListener, Liste
      */
     private void process()
     {
-        if(mCurrent)
+        if(mCurrentForChannelProcessing)
         {
-            long partialCorrection = Math.clamp(mRemainingFrequencyError, -MAXIMUM_CHANNEL_ERROR_CORRECTION_PER_INTERVAL, MAXIMUM_CHANNEL_ERROR_CORRECTION_PER_INTERVAL);
+            long partialCorrection = Math.clamp(mAverageRequestedCorrection, -MAXIMUM_CHANNEL_ERROR_CORRECTION_PER_INTERVAL, MAXIMUM_CHANNEL_ERROR_CORRECTION_PER_INTERVAL);
 
             if(partialCorrection != 0)
             {
@@ -140,9 +141,12 @@ public class ChannelFrequencyErrorManager implements ISourceEventListener, Liste
             }
 
             ChannelFrequencyCorrectionStatusNotification notification = ChannelFrequencyCorrectionStatusNotification
-                    .create(mTunerChannelSource, mRemainingFrequencyError, mAppliedFrequencyCorrection, mParent.getTunerPPM(),
+                    .create(mTunerChannelSource, mAverageRequestedCorrection, mAppliedFrequencyCorrection, mParent.getTunerPPM(),
                             mParent.getTunerFrequencyCorrection(), mParent.isEnabled());
             mTunerChannelSource.broadcastConsumerSourceEvent(notification);
+            mAverageRequestedCorrection = 0;
+            mCurrentForTunerProcessing = true;
+            mCurrentForChannelProcessing = false;
         }
         else
         {

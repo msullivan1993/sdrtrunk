@@ -24,10 +24,11 @@ import io.github.dsheirer.dsp.symbol.Dibit;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.message.SyncLossMessage;
 import io.github.dsheirer.module.decode.nxdn.layer1.Frame;
+import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardHardSyncDetector;
 import io.github.dsheirer.module.decode.nxdn.layer2.LICHTracker;
 import io.github.dsheirer.module.decode.nxdn.layer2.Structure;
+import io.github.dsheirer.module.decode.nxdn.layer3.call.Audio;
 import io.github.dsheirer.module.decode.nxdn.layer3.type.TransmissionMode;
-import io.github.dsheirer.module.decode.nxdn.sync.standard.NXDNStandardHardSyncDetector;
 import io.github.dsheirer.protocol.Protocol;
 import io.github.dsheirer.sample.Listener;
 
@@ -116,8 +117,11 @@ public class NXDNMessageFramer
 
             for(NXDNMessage message: frame.getMessages())
             {
-                validMessage |= message.isValid();
-                dispatch(message);
+                if(!(message instanceof Audio))
+                {
+                    validMessage |= message.isValid();
+                    dispatch(message);
+                }
             }
 
             mSymbolsSinceLastSync -= 192;
