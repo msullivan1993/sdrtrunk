@@ -756,7 +756,7 @@ public class NXDNSymbolProcessor
             mGain = gain;
             mGainMax = gain + 0.5f;
             mGainMin = gain - 0.5f;
-            System.out.println("SPS: " + samplesPerSymbol + " Gain - Ratio:" + ratio + " Initial: " + mGainInitial + " Min:" + mGainMin + " Max:" + mGainMax + " Gain" + mGain);
+//            System.out.println("SPS: " + samplesPerSymbol + " Gain - Ratio:" + ratio + " Initial: " + mGainInitial + " Min:" + mGainMin + " Max:" + mGainMax + " Gain" + mGain);
         }
 
         /**
