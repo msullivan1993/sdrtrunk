@@ -20,6 +20,7 @@ package io.github.dsheirer.module.decode.p25.phase1;
 
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
@@ -27,6 +28,7 @@ import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
 /**
  * APCO25 Phase 1 decoder configuration
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DecodeConfigP25Phase1 extends DecodeConfigP25
 {
     public static final int CHANNEL_ROTATION_DELAY_MINIMUM_MS = 400;

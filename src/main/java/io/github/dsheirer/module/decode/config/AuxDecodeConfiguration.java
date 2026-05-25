@@ -21,6 +21,7 @@
  */
 package io.github.dsheirer.module.decode.config;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.controller.config.Configuration;
@@ -29,6 +30,7 @@ import io.github.dsheirer.module.decode.DecoderType;
 import java.util.ArrayList;
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonSubTypes.Type(value = AuxDecodeConfiguration.class, name = "auxDecodeConfiguration")
 public class AuxDecodeConfiguration extends Configuration
 {

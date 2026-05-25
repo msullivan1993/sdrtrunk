@@ -19,6 +19,7 @@
 package io.github.dsheirer.module.decode.dmr;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
@@ -32,6 +33,7 @@ import java.util.List;
 /**
  * DMR Decoder Configuration
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DecodeConfigDMR extends DecodeConfiguration
 {
     public static final int CHANNEL_ROTATION_DELAY_MINIMUM_MS = 200;

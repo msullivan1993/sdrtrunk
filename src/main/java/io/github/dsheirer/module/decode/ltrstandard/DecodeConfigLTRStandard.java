@@ -18,12 +18,14 @@
 package io.github.dsheirer.module.decode.ltrstandard;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.message.MessageDirection;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
 import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DecodeConfigLTRStandard extends DecodeConfiguration
 {
     private MessageDirection mMessageDirection = MessageDirection.OSW;
