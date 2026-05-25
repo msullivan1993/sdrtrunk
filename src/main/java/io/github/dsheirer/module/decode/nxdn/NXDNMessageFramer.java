@@ -120,8 +120,9 @@ public class NXDNMessageFramer
                 if(!(message instanceof Audio))
                 {
                     validMessage |= message.isValid();
-                    dispatch(message);
                 }
+
+                dispatch(message);
             }
 
             mSymbolsSinceLastSync -= 192;

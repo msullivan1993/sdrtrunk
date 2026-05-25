@@ -111,9 +111,10 @@ public class PassThroughSourceManager extends ChannelSourceManager
 
         TunerChannelSource source = null;
 
+        mTunerController.getLock().lock();
+
         try
         {
-            mTunerController.getLock().lock();
             PassThroughChannelSource channelSource = new PassThroughChannelSource(new SourceEventProxy(),
                     mTunerController, tunerChannel, threadName);
 

@@ -436,9 +436,10 @@ public class PolyphaseChannelSourceManager extends ChannelSourceManager
     {
         TunerChannelSource tunerChannelSource = null;
 
+        mTunerController.getLock().lock();
+
         try
         {
-            mTunerController.getLock().lock();
             if(isTunable(tunerChannel))
             {
                 //Get a new set of currently tuned channels
