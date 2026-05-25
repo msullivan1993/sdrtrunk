@@ -19,6 +19,7 @@
 package io.github.dsheirer.module.decode.am;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.dsp.squelch.ISquelchConfiguration;
 import io.github.dsheirer.module.decode.DecoderType;
@@ -28,6 +29,7 @@ import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
 /**
  * AM decoder configuration
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DecodeConfigAM extends DecodeConfigAnalog implements ISquelchConfiguration
 {
     private int mSquelchThreshold = -78;

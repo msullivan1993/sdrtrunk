@@ -20,6 +20,7 @@ package io.github.dsheirer.module.decode.p25.phase2;
 
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.p25.phase1.DecodeConfigP25;
@@ -30,6 +31,7 @@ import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
 /**
  * APCO25 Phase 2 decoder configuration
  */
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class DecodeConfigP25Phase2 extends DecodeConfigP25
 {
     private ScrambleParameters mScrambleParameters;
