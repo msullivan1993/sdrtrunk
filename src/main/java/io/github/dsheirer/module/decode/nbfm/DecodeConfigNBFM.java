@@ -47,7 +47,6 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     private int mSquelchHysteresisCloseThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_CLOSE_THRESHOLD;
     private int mSquelchDelayTimeMs = 0;
     private boolean mSquelchDelayRemoveSilence = true;
-    private int mSquelchTailMs = 0;
 
     // Channel-level squelch filtering
     private List<squelchDecoderConfig> mSquelchDecoders = new ArrayList<>();
@@ -368,29 +367,5 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     public void setSquelchDelayRemoveSilence(boolean removeSilence)
     {
         mSquelchDelayRemoveSilence = removeSilence;
-    }
-
-    /**
-     * Squelch tail duration in milliseconds (0-500). Brief audio tail after squelch closes
-     * to mimic traditional radio squelch crash sound.
-     * @return tail duration in milliseconds
-     */
-    @JacksonXmlProperty(isAttribute = true, localName = "squelchTailMs")
-    public int getSquelchTailMs()
-    {
-        return mSquelchTailMs;
-    }
-
-    /**
-     * Sets the squelch tail duration in milliseconds.
-     * @param tailMs tail duration (0-500ms)
-     */
-    public void setSquelchTailMs(int tailMs)
-    {
-        if(tailMs < 0 || tailMs > 500)
-        {
-            throw new IllegalArgumentException("Squelch tail must be between 0 and 500ms: " + tailMs);
-        }
-        mSquelchTailMs = tailMs;
     }
 }
