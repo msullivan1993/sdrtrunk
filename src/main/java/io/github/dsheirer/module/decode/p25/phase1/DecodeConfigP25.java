@@ -19,12 +19,14 @@
 package io.github.dsheirer.module.decode.p25.phase1;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
 import io.github.dsheirer.module.decode.p25.phase2.DecodeConfigP25Phase2;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 @JsonTypeInfo(use = JsonTypeInfo.Id.NAME, include = JsonTypeInfo.As.PROPERTY, property = "type")
 @JsonSubTypes({
         @JsonSubTypes.Type(value = DecodeConfigP25Phase1.class, name = "decodeConfigP25Phase1"),
