@@ -36,27 +36,27 @@ public class C4FMEqualizer
     private static final double TRAINING_CONVERGENCE_THRESHOLD = 0.16f;
     private static final double TRAINING_SKIP_THRESHOLD = 0.05;
     private static final int TRAINING_ITERATIONS_MAX = 50;
+    private final Variance mVariance = new Variance();
     private final float[] mBuffer;
-    private float[] mTaps;
-    private boolean mEnabled = false;
-    private int mCenterTap = 0;
-    private int mDelaySymbolCount;
-    private Variance mVariance = new Variance();
-    private float[] mTrainingSnapshot;
-    private float[] mReversedSyncSymbols;
-    private boolean mSyncDetected = false;
-    private int mTrainingSymbolsRemaining = 0;
+    private final float[] mReversedSyncSymbols;
+    private final int mDelaySymbolCount;
     private boolean mDynamicTapUpdates = false;
+    private boolean mEnabled = false;
+    private boolean mSyncDetected = false;
+    private float[] mTaps;
+    private float[] mTapsTrainingSnapshot;
+    private int mCenterTap = 0;
+    private int mTrainingSymbolsRemaining = 0;
 
     /**
      * Constructs an instance
-     *
+     * @param syncSymbols used to train the equalizer on sync detections
      * @param symbolLength for the equalizer, odd length.  Note: if the argument is not odd valued,
      * the symbol count will be increased to make it odd length.
      */
     public C4FMEqualizer(float[] syncSymbols, int symbolLength)
     {
-        //Store the sync pattern in reverse order
+        //Store the sync pattern in reversed order
         mReversedSyncSymbols = new float[syncSymbols.length];
         for(int x = 0; x < syncSymbols.length; x++)
         {
@@ -64,13 +64,12 @@ public class C4FMEqualizer
         }
 
         //Make the symbol count odd length for equal delay on either side of the center tap
-        symbolLength = (symbolLength % 2 == 1) ? symbolLength : symbolLength + 1;
+        symbolLength += (symbolLength % 2 == 0) ? 1 : 0;
         mCenterTap = symbolLength; //This works since we're going to double the buffer length
         mDelaySymbolCount = symbolLength / 2; //Delay until new symbol is aligned to center tap
         mTaps = new float[symbolLength * 2];
         mTaps[mCenterTap] = 1.0f;
-        mTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
-        DF.setPositivePrefix(" ");
+        mTapsTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
         int bufferLength = mReversedSyncSymbols.length * 2 + mTaps.length - 2;
         mBuffer = new float[bufferLength];
     }
@@ -129,9 +128,22 @@ public class C4FMEqualizer
         mTrainingSymbolsRemaining = mDelaySymbolCount;
     }
 
+    /**
+     * Indicates that the sync patter is lost and the equalizer should reset.
+     */
     public void syncLost()
     {
-        //TODO: handle this.
+        reset();
+        disable();
+    }
+
+    /*
+     * Resets the equalizer taps
+     */
+    private void reset()
+    {
+        Arrays.fill(mTaps, 0f);
+        mTaps[mCenterTap] = 1.0f;
     }
 
     /**
@@ -213,7 +225,7 @@ public class C4FMEqualizer
             // symbol is excessive, fallback to the most recent training snapshot as a better starting point
             if(mVariance.getResult() > 0.225)
             {
-                mTaps = Arrays.copyOf(mTrainingSnapshot, mTrainingSnapshot.length);
+                mTaps = Arrays.copyOf(mTapsTrainingSnapshot, mTapsTrainingSnapshot.length);
             }
 
             float accumulator, error;
@@ -257,31 +269,22 @@ public class C4FMEqualizer
             //disable dynamic tap updates until the signal becomes less noisy
             if(variance.getResult() < TRAINING_CONVERGENCE_THRESHOLD)
             {
-                mTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
+                mTapsTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
                 mDynamicTapUpdates = true;
             }
             else
             {
-                mTaps = Arrays.copyOf(mTrainingSnapshot, mTrainingSnapshot.length);
+                mTaps = Arrays.copyOf(mTapsTrainingSnapshot, mTapsTrainingSnapshot.length);
                 mDynamicTapUpdates = false;
             }
         }
         else if(mVariance.getN() >= mDelaySymbolCount && mVariance.getResult() < TRAINING_SKIP_THRESHOLD)
         {
             //Snapshot the current taps as the training sequence
-            mTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
+            mTapsTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
             mDynamicTapUpdates = true;
         }
 
         mVariance.clear();
-    }
-
-    /*
-     * Resets the equalizer taps
-     */
-    private void reset()
-    {
-        Arrays.fill(mTaps, 0f);
-        mTaps[mCenterTap] = 1.0f;
     }
 }

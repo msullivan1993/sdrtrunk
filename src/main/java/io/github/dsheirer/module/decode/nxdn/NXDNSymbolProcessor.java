@@ -194,19 +194,16 @@ public class NXDNSymbolProcessor
                     if(mSynchronized && symbolsSinceLastSync > 192)
                     {
                         mSampleEqualizer.reset();
-                        mSymbolEqualizer.disable();
+                        mSymbolEqualizer.syncLost();
+                        mSynchronized = false;
                     }
 
                     softSymbol = mSampleEqualizer.getEqualizedSymbol(mBuffer[bufferPointer], mBuffer[bufferPointer + 1], samplePoint);
-//                    softSymbol = Math.clamp(softSymbol, -FLOAT_PI, FLOAT_PI);
-
 
                     //Check for lagging sync pattern
                     float lag = (float)(bufferPointer + samplePoint - mLaggingSyncOffset);
                     int lagIntegral = (int)Math.floor(lag);
                     float softSymbolLag = mSampleEqualizer.getEqualizedSymbol(mBuffer[lagIntegral], mBuffer[lagIntegral + 1], lag - lagIntegral);
-//                    softSymbolLag = Math.clamp(softSymbolLag, -FLOAT_PI, FLOAT_PI);
-
                     float scoreLag = mSyncDetectorLagging.process(softSymbolLag);
                     scorePrimary = mSyncDetector.process(softSymbol);
 
@@ -282,11 +279,6 @@ public class NXDNSymbolProcessor
                         else
                         {
                             samplePoint += correctionCandidate.getTimingCorrection();
-
-                            if(Math.abs(correctionCandidate.getTimingCorrection()) > mTimingCorrectionThreshold)
-                            {
-                                //TODO: Resample the symbols and inter-symbols and feed to the equalizer to train against.
-                            }
                         }
 
                         mDelayedSyncDetectionTriggerPending = true;
@@ -294,8 +286,8 @@ public class NXDNSymbolProcessor
                         mSynchronized = true;
                         symbolsSinceLastSync = 0;
 
-                        //If the equalizer was disabled, it has misaligned samples contaminating the training buffer and
-                        // we need to prime that buffer with aligned samples prior to training.
+                        //If the equalizer was disabled, it has bad samples contaminating the training buffer and we
+                        // need to prime that buffer with aligned samples prior to sync detection training.
                         if(!mSymbolEqualizer.isEnabled())
                         {
                             int symbols = mSyncDetector.getSyncSymbols().length + mSymbolEqualizer.getLength() - mSymbolEqualizer.getDelaySymbolCount();
@@ -342,37 +334,45 @@ public class NXDNSymbolProcessor
         mSymbolsSinceLastSync = symbolsSinceLastSync;
     }
 
+    /**
+     * Validates the sync detection and candidate correction settings against a reference instance of the sync detection
+     * waveform.  If the detected sync correlates well against the reference sync then the correction is valid.
+     * Otherwise, this method returns the static invalid sync correction to signal that the sync detection was invalid.
+     * @param correction to evaluate
+     * @param bufferPointer for the final (optimized) symbol in the buffer
+     * @param samplePoint offset from the buffer pointer to the final symbol
+     * @return the original correction or the static invalid sync correction
+     */
     private Correction validateSyncWaveform(Correction correction, int bufferPointer, double samplePoint)
     {
         float gain = mSampleEqualizer.mGain + correction.getGainAdjustment();
         float balance = mSampleEqualizer.mBalance + correction.getBalanceAdjustment();
-
-        double offset = bufferPointer + samplePoint + correction.getTimingCorrection() - mReferenceSyncWaveform.waveform().length;
+        double offset = bufferPointer + samplePoint + correction.getTimingCorrection() - mReferenceSyncWaveform.samples().length;
         int integral = (int)Math.ceil(offset);
         double mu = integral - offset;
         double accumulator = 0.0;
         int index;
 
-        for(int x = mReferenceSyncWaveform.waveform().length - 1; x >= 0; x--)
+        //Evaluate the reference waveform in reverse order since the final symbol is aligned to the final sample
+        for(int x = mReferenceSyncWaveform.samples().length - 1; x >= 0; x--)
         {
             index = integral + x;
             float sample = LinearInterpolator.calculate(mBuffer[index], mBuffer[index + 1], mu);
             sample += balance;
             sample *= gain;
             sample = Math.clamp(sample, -mReferenceSyncWaveform.maxSample(), mReferenceSyncWaveform.maxSample());
-            accumulator += mReferenceSyncWaveform.waveform()[x] * sample;
+            accumulator += mReferenceSyncWaveform.samples()[x] * sample;
         }
 
-        double threshold = mReferenceSyncWaveform.idealCorrelationScore() * 0.88;
+        double threshold = mReferenceSyncWaveform.idealCorrelationScore() * 0.85; //85% of the ideal correlation score
 
-
+        //Return the correction as valid if the correlation score exceeds the threshold, otherwise return the static
+        // invalid sync detection to nullify the correction.
         if(accumulator > threshold)
         {
-//            System.out.println("Sync Waveform Correlation Score: " + accumulator + " Threshold: " + threshold);
             return correction;
         }
 
-//        System.out.println("Sync Waveform Correlation Score: " + accumulator + " Threshold: " + threshold + " <<<<<<< INVALID - REJECTED SYNC DETECTION");
         return INVALID_SYNC_DETECTION;
     }
 
@@ -756,6 +756,7 @@ public class NXDNSymbolProcessor
             mGain = gain;
             mGainMax = gain + 0.5f;
             mGainMin = gain - 0.5f;
+//TODO: figure out a good formula for initial gain settings ..
 //            System.out.println("SPS: " + samplesPerSymbol + " Gain - Ratio:" + ratio + " Initial: " + mGainInitial + " Min:" + mGainMin + " Max:" + mGainMax + " Gain" + mGain);
         }
 

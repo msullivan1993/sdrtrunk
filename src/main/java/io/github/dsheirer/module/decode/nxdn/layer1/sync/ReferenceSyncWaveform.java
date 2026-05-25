@@ -21,8 +21,8 @@ package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
 /**
  * Waveform representing the ideal sync pattern, resampled at the sample rate.
- * @param waveform in samples
+ * @param samples in samples
  * @param idealCorrelationScore as dot-product of the ideal multiplied by itself.
  * @param maxSample maximum allowable sample value
  */
-public record ReferenceSyncWaveform(float[] waveform, float idealCorrelationScore, float maxSample){};
+public record ReferenceSyncWaveform(float[] samples, float idealCorrelationScore, float maxSample){};

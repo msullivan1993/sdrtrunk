@@ -20,6 +20,7 @@
 package io.github.dsheirer.module.decode.nxdn.layer3.filter;
 
 import io.github.dsheirer.filter.FilterSet;
+import io.github.dsheirer.filter.SyncLossMessageFilter;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.message.SyncLossMessage;
 import io.github.dsheirer.module.decode.nxdn.NXDNMessage;
@@ -56,6 +57,7 @@ public class NXDNMessageFilterSet extends FilterSet<IMessage>
         addFilter(new NXDNLayer3MessageFilter("Inbound Type-D Call Control", NXDNMessageType.TYPE_D_IN_CALL_CONTROL));
         addFilter(new NXDNLayer3MessageFilter("Inbound Type-D Mobility Management", NXDNMessageType.TYPE_D_IN_MOBILITY_MANAGEMENT));
         addFilter(new NXDNLayer3MessageFilter("Inbound Type-D SCCH", NXDNMessageType.TYPE_D_IN_SCCH));
+        addFilter(new SyncLossMessageFilter());
     }
 
     /**
