@@ -29,8 +29,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,7 +46,6 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
     private static final long TIMER_INTERVAL_SECONDS = 5;
     private static final DecimalFormat DF = new DecimalFormat("0.00000");
     private final List<ChannelFrequencyErrorManager> mChannelManagers = new ArrayList<>();
-    private final Lock mLock = new ReentrantLock();
     private ScheduledFuture<?> mScheduledFuture;
     private TunerController mTunerController;
     private boolean mEnabled = true;
@@ -116,7 +113,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
      */
     private void process()
     {
-        mLock.lock();
+        mTunerController.getLock().lock();
 
         try
         {
@@ -160,7 +157,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
         }
         finally
         {
-            mLock.unlock();
+            mTunerController.getLock().unlock();
         }
     }
 
@@ -188,7 +185,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
      */
     private void broadcast(long change)
     {
-        mLock.lock();
+        mTunerController.getLock().lock();
 
         try
         {
@@ -199,7 +196,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
         }
         finally
         {
-            mLock.unlock();
+            mTunerController.getLock().unlock();
         }
     }
 
@@ -212,7 +209,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
     {
         boolean startRequired = false;
 
-        mLock.lock();
+        mTunerController.getLock().lock();
 
         try
         {
@@ -224,7 +221,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
         }
         finally
         {
-            mLock.unlock();
+            mTunerController.getLock().unlock();
         }
 
         if(startRequired)
@@ -241,7 +238,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
     {
         boolean stopRequired = false;
 
-        mLock.lock();
+        mTunerController.getLock().lock();
 
         try
         {
@@ -250,7 +247,7 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
         }
         finally
         {
-            mLock.unlock();
+            mTunerController.getLock().unlock();
         }
 
         if(stopRequired)

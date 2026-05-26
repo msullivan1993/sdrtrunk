@@ -64,6 +64,7 @@ public class NXDNSymbolProcessor
     private final NXDNStandardSoftSyncDetector mSyncDetectorLagging = NXDNSyncDetectorFactory.getStandardDetector();
     private final SampleEqualizer mSampleEqualizer = new SampleEqualizer();
     private final C4FMEqualizer mSymbolEqualizer;
+    private final SyncTracker mSyncTracker = new SyncTracker(2400, 3);
     private double mNoiseStandardDeviationThreshold;
     private double mSamplePoint;
     private double mSamplePointAdjustment;
@@ -135,7 +136,7 @@ public class NXDNSymbolProcessor
         int symbolsSinceLastSync = mSymbolsSinceLastSync;
 
         int samplesPointer = 0;
-        float softSymbol, scorePrimary, scoreControl;
+        float softSymbol, scorePrimary;
         Correction correctionCandidate;
 
         if(!mSynchronized && samples.length > 400)
@@ -209,22 +210,6 @@ public class NXDNSymbolProcessor
 
                     correctionCandidate = INVALID_SYNC_DETECTION;
 
-//                    if(mVisualize)
-//                    {
-//                        System.out.println(mDebugSymbolCounter + " PRI:" + DF.format(scorePrimary) + " LAG:" + DF.format(scoreLag) +
-//                                " EQ-B:" + mSampleEqualizer.mBalance + " EQ-G:" + mSampleEqualizer.mGain + (mSynchronized ? " :S" : ""));
-//
-//                        boolean sync = (scorePrimary > SYNC_THRESHOLD_DETECTION) || (scoreLag > SYNC_THRESHOLD_DETECTION);
-//
-//                        if(scorePrimary > 30 || scoreLag > 30)
-//                        {
-//                            System.out.println(mDebugSymbolCounter +
-//                                    "\tPRIMARY:" + scorePrimary +
-//                                    "\tLAG:" + scoreLag +
-//                                    (sync ? " <<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<<< sync detected: " + symbolsSinceLastSync : ""));
-//                        }
-//                    }
-
                     if(scorePrimary > SYNC_THRESHOLD_DETECTION && scorePrimary > scoreLag)
                     {
                         correctionCandidate = mSampleEqualizer.optimize(mSyncDetector, 0, scorePrimary,
@@ -249,6 +234,8 @@ public class NXDNSymbolProcessor
                         getSyncResultsViewer().symbol(softSymbol);
                     }
 
+                    //When the message framer emits at least one valid message (ie CRC check passes), send the current
+                    // sample equalizer's balance value as a pseudo-PLL error measurement.
                     if(mMessageFramer.process(symbol))
                     {
                         mFeedbackDecoder.processPLLError(mSampleEqualizer.balance());
