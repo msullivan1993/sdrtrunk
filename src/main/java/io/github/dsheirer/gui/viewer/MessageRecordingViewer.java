@@ -96,7 +96,7 @@ public class MessageRecordingViewer extends VBox
                 getTabPane().getTabs().add(tab);
                 getTabPane().getSelectionModel().select(tab);
             });
-            createNewViewerMenu.getItems().addAll(nxdnMenuItem, p25p1MenuItem, p25p2MenuItem);
+            createNewViewerMenu.getItems().addAll(dmrMenuItem, nxdnMenuItem, p25p1MenuItem, p25p2MenuItem);
 
             MenuItem exitMenu = new MenuItem("Exit");
             exitMenu.onActionProperty().set(event -> ((Stage)getScene().getWindow()).close());

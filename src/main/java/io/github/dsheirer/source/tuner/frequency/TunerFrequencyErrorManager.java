@@ -46,8 +46,8 @@ public class TunerFrequencyErrorManager implements ISourceEventProcessor
     private static final long TIMER_INTERVAL_SECONDS = 5;
     private static final DecimalFormat DF = new DecimalFormat("0.00000");
     private final List<ChannelFrequencyErrorManager> mChannelManagers = new ArrayList<>();
+    private final TunerController mTunerController;
     private ScheduledFuture<?> mScheduledFuture;
-    private TunerController mTunerController;
     private boolean mEnabled = true;
     private boolean mShutdown = false;
     private double mTunerPPM;
