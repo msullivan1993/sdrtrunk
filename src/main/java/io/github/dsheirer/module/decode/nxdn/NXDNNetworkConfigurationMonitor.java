@@ -67,7 +67,7 @@ public class NXDNNetworkConfigurationMonitor
 
         if(mDigitalStationIDInformation != null)
         {
-            sb.append("Current Channel Station ID\n\t").append(mDigitalStationIDInformation).append("\n");
+            sb.append("Current Channel Station ID\n  ").append(mDigitalStationIDInformation).append("\n");
         }
         if(mSiteInformation != null)
         {

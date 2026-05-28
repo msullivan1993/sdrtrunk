@@ -41,7 +41,8 @@ import io.github.dsheirer.sample.Listener;
  */
 public class NXDNMessageFramer
 {
-    private static final float SYNC_DETECTION_THRESHOLD = 60;
+    private static final int FRAME_LENGTH_SYMBOL_COUNT = 192;
+    private static final int SYNC_PATTERN_SYMBOL_LENGTH = 10;
     private final NXDNStandardHardSyncDetector mHardSyncDetector = new NXDNStandardHardSyncDetector();
     private boolean mSyncDetected = false;
 
@@ -125,7 +126,12 @@ public class NXDNMessageFramer
                 dispatch(message);
             }
 
-            mSymbolsSinceLastSync -= 192;
+            mSymbolsSinceLastSync -= FRAME_LENGTH_SYMBOL_COUNT;
+            if(mSymbolsSinceLastSync != 0)
+            {
+                System.out.println("Residual symbol count after message dispatch: " + mSymbolsSinceLastSync);
+            }
+
             mMessageAssembler = null;
 
             return validMessage;
@@ -149,24 +155,27 @@ public class NXDNMessageFramer
     public void syncDetected()
     {
         //Ignore any sync detections that happen when we're already assembling a frame.
-//        if(mMessageAssembler != null)
-//        {
-//            System.out.println("****** NXDN SYNC DETECTED WHILE STILL ASSEMBLING PREVIOUS MESSAGE - THIS HAPPENS DUE TO DROPPED SAMPLES *****");
-//            dispatchMessage();
-//        }
+        if(mMessageAssembler != null)
+        {
+//TODO: remove after debug
+            System.out.println("****** NXDN SYNC DETECTED WHILE STILL ASSEMBLING PREVIOUS MESSAGE - THIS HAPPENS DUE TO DROPPED SAMPLES *****");
+            dispatchMessage();
+        }
 
         mMessageAssembler = new NXDNFrameAssembler();
 
-        if(mSymbolsSinceLastSync > 12)
+        //Update sync loss accounting when we have more/less than the expected sync pattern symbol count.
+        if(mSymbolsSinceLastSync > SYNC_PATTERN_SYMBOL_LENGTH)
         {
-            dispatch(new SyncLossMessage(getTimestamp(), (mSymbolsSinceLastSync - 12) * 2, Protocol.NXDN));
-            mSymbolsSinceLastSync = 12;
+            dispatch(new SyncLossMessage(getTimestamp(),
+                    (mSymbolsSinceLastSync - SYNC_PATTERN_SYMBOL_LENGTH) * 2, Protocol.NXDN));
+            mSymbolsSinceLastSync = SYNC_PATTERN_SYMBOL_LENGTH;
         }
-
-        if(mSymbolsSinceLastSync < 0)
+        else if(mSymbolsSinceLastSync != SYNC_PATTERN_SYMBOL_LENGTH)
         {
-//            System.out.println("***** SYMBOLS SINE LAST SYNC AT SYNC DETECTION: " + mSymbolsSinceLastSync);
-            mSymbolsSinceLastSync = 0;
+            //TODO: remove after debug
+            System.out.println("***** SYMBOLS SINCE LAST SYNC AT SYNC DETECTION: " + mSymbolsSinceLastSync);
+            mSymbolsSinceLastSync = SYNC_PATTERN_SYMBOL_LENGTH;
         }
     }
 
@@ -216,7 +225,7 @@ public class NXDNMessageFramer
         {
             syncDetected();
         }
-        else if(mSymbolsSinceLastSync == 192)
+        else if(mSymbolsSinceLastSync == FRAME_LENGTH_SYMBOL_COUNT)
         {
             if(mHardSyncDetector.getCurrentBitErrors() <= 10)
             {
