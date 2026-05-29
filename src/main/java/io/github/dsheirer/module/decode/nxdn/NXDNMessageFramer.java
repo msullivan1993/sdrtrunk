@@ -124,11 +124,6 @@ public class NXDNMessageFramer
             }
 
             mSymbolsSinceLastSync -= FRAME_LENGTH_SYMBOL_COUNT;
-            if(mSymbolsSinceLastSync != 0)
-            {
-                System.out.println("Residual symbol count after message dispatch: " + mSymbolsSinceLastSync);
-            }
-
             mMessageAssembler = null;
 
             return validMessage;
