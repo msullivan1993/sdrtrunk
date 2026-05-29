@@ -126,6 +126,10 @@ public class RecorderFactory
                                 recorderModules.add(new DMRCallSequenceRecorder(userPreferences, frequency,
                                         channel.getSystem(), channel.getSite()));
                                 break;
+                            case NXDN:
+                                recorderModules.add(new NXDNCallSequenceRecorder(userPreferences, frequency,
+                                        channel.getSystem(), channel.getSite()));
+                                break;
                             case P25_PHASE1:
                                 recorderModules.add(new P25P1CallSequenceRecorder(userPreferences, frequency,
                                     channel.getSystem(), channel.getSite()));
