@@ -75,7 +75,8 @@ public class LICHTracker
      */
     public Direction getDirection()
     {
-        return mTrackedDirection;
+//        return mTrackedDirection;
+        return Direction.OUTBOUND;
     }
 
     /**
