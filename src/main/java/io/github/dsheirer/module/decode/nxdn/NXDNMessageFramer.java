@@ -26,7 +26,6 @@ import io.github.dsheirer.message.SyncLossMessage;
 import io.github.dsheirer.module.decode.nxdn.layer1.Frame;
 import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardHardSyncDetector;
 import io.github.dsheirer.module.decode.nxdn.layer2.LICHTracker;
-import io.github.dsheirer.module.decode.nxdn.layer2.Structure;
 import io.github.dsheirer.module.decode.nxdn.layer3.call.Audio;
 import io.github.dsheirer.module.decode.nxdn.layer3.type.TransmissionMode;
 import io.github.dsheirer.protocol.Protocol;
@@ -57,6 +56,7 @@ public class NXDNMessageFramer
     private final LICHTracker mLICHTracker;
     private int mSymbolsSinceLastSync = 384;
     private final int mSymbolsPerSecond;
+    private final boolean mTypeD;
 
     /**
      * Constructs an instance
@@ -67,6 +67,7 @@ public class NXDNMessageFramer
     {
         mMessageListener = messageListener;
         mLICHTracker = new LICHTracker(transmissionMode);
+        mTypeD = transmissionMode == TransmissionMode.TYPE_D;
         mSymbolsPerSecond = transmissionMode.getSymbolRate();
     }
 
@@ -108,11 +109,7 @@ public class NXDNMessageFramer
         {
             CorrectedBinaryMessage cbm = mMessageAssembler.getMessage();
 
-            Frame frame = new Frame(cbm, getTimestamp(), mLICHTracker.getChannel(), mLICHTracker.getDirection());
-            if(frame.getLICH().getStructure() != Structure.UNKNOWN)
-            {
-                mLICHTracker.track(frame.getLICH());
-            }
+            Frame frame = new Frame(cbm, getTimestamp(), mLICHTracker);
 
             boolean validMessage = false;
 
@@ -157,8 +154,6 @@ public class NXDNMessageFramer
         //Ignore any sync detections that happen when we're already assembling a frame.
         if(mMessageAssembler != null)
         {
-//TODO: remove after debug
-            System.out.println("****** NXDN SYNC DETECTED WHILE STILL ASSEMBLING PREVIOUS MESSAGE - THIS HAPPENS DUE TO DROPPED SAMPLES *****");
             dispatchMessage();
         }
 
@@ -173,8 +168,6 @@ public class NXDNMessageFramer
         }
         else if(mSymbolsSinceLastSync != SYNC_PATTERN_SYMBOL_LENGTH)
         {
-            //TODO: remove after debug
-            System.out.println("***** SYMBOLS SINCE LAST SYNC AT SYNC DETECTION: " + mSymbolsSinceLastSync);
             mSymbolsSinceLastSync = SYNC_PATTERN_SYMBOL_LENGTH;
         }
     }

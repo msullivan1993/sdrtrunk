@@ -231,6 +231,26 @@ public enum LICH
     }
 
     /**
+     * Lookup the LICH from the value.
+     * @param value to lookup
+     * @param isTypeD to differentiate between Type-D versus Standard systems.
+     * @return matching entry or UNKNOWN if the value doesn't match any LICH values.
+     */
+    public static LICH fromValue(int value, boolean isTypeD)
+    {
+        if(isTypeD && LOOKUP_MAP_TYPE_D.containsKey(value))
+        {
+            return LOOKUP_MAP_TYPE_D.get(value);
+        }
+        else if(!isTypeD && LOOKUP_MAP_STANDARD.containsKey(value))
+        {
+            return LOOKUP_MAP_STANDARD.get(value);
+        }
+
+        return UNKNOWN;
+    }
+
+    /**
      * Look up the matching entry from the transmitted value.  The channel and direction parameters should be from
      * a tracker for the majority of observed values for the channel since the channel type and direction normally
      * won't change within the transmission.  These two additional values are for instance when the LICH has bit

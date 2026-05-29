@@ -24,9 +24,9 @@ import io.github.dsheirer.bits.CorrectedBinaryMessage;
 import io.github.dsheirer.bits.FragmentedIntField;
 import io.github.dsheirer.bits.IntField;
 import io.github.dsheirer.module.decode.nxdn.NXDNMessage;
-import io.github.dsheirer.module.decode.nxdn.layer2.Direction;
 import io.github.dsheirer.module.decode.nxdn.layer2.Interleaver;
 import io.github.dsheirer.module.decode.nxdn.layer2.LICH;
+import io.github.dsheirer.module.decode.nxdn.layer2.LICHTracker;
 import io.github.dsheirer.module.decode.nxdn.layer2.RFChannel;
 import io.github.dsheirer.module.decode.nxdn.layer2.SACCHFragment;
 import io.github.dsheirer.module.decode.nxdn.layer2.Scrambler;
@@ -68,6 +68,8 @@ public class Frame
     private static final IntField STRUCTURE = IntField.length2(0);
     private static final IntField RADIO_ACCESS_NUMBER = IntField.length6(2);
     private static final FragmentedIntField LICH_FIELD = FragmentedIntField.of(0, 2, 4, 6, 8, 10, 12);
+    private static final FragmentedIntField LICH_PARITY_FIELD = FragmentedIntField.of(0, 2, 4, 6);
+    private static final int LICH_EVEN_PARITY_CHECK_BIT = 14;
     private static final int RAN_TYPE_D = 0;
 
     static
@@ -78,7 +80,7 @@ public class Frame
         SCRAMBLE_SEQUENCE_CONTROL_OUTBOUND.xor(SCRAMBLE_SEQUENCE_LICH);
     }
 
-    private final LICH mLICH;
+    private LICH mLICH;
     private List<NXDNMessage> mMessages = new ArrayList<>();
 
     /**
@@ -86,163 +88,185 @@ public class Frame
      * LICH value for this frame due to decoding errors.
      * @param message with frame bits
      * @param timestamp for the frame.
-     * @param channel as tracked across the most recent 3 frames or UNKNOWN (default).
-     * @param direction as tracked across the most recent 3 frames or OUTBOUND (default).
+     * @param tracker for accessing tracked RF channel type and direction.
+     * @param isTypeD to indicate if this is a Type-D system or a Standard system.
      */
-    public Frame(CorrectedBinaryMessage message, long timestamp, RFChannel channel, Direction direction)
+    public Frame(CorrectedBinaryMessage message, long timestamp, LICHTracker tracker)
     {
         message.xor(SCRAMBLE_SEQUENCE_LICH);
-        mLICH = LICH.fromValue(message.getInt(LICH_FIELD), channel, direction);
+        boolean lichParityValid = checkLICHParity(message);
+        int lichValue = message.getInt(LICH_FIELD);
+        mLICH = LICH.fromValue(lichValue, tracker.isTypeD());
+
+        //If failed parity check or UNKNOWN LICH, force the highest occurring channel/direction from the tracker
+        if((!lichParityValid && tracker.getChannel() != RFChannel.UNKNOWN) || mLICH == LICH.UNKNOWN)
+        {
+            mLICH = LICH.fromValue(lichValue, tracker.getChannel(), tracker.getDirection());
+        }
+        else
+        {
+            tracker.track(mLICH);
+        }
 
         //Descramble the message according to the RF Channel Type and repeater direction.  Control channel uses the
-        // full scramble sequence truncated based on repeater direction.  All others use a full scramble sequence.
-        switch(mLICH.getRFChannel())
+        //full scramble sequence truncated based on repeater direction.  All others use a full scramble sequence.
+        //RDCH, RTCH and RTCH2
+        if(mLICH.getRFChannel() == RFChannel.RCCH)
         {
-            case RCCH:
-                if(mLICH.isOutbound())
-                {
-                    message.xor(SCRAMBLE_SEQUENCE_CONTROL_OUTBOUND);
-                    CorrectedBinaryMessage payload = decodeCAC(message);
-                    int ran = payload.getInt(RADIO_ACCESS_NUMBER);
-                    CorrectedBinaryMessage cac = payload.getSubMessage(8, 152);
-                    cac.setCorrectedBitCount(payload.getCorrectedBitCount());
-                    NXDNMessageType type = NXDNMessageType.getControl(cac, mLICH);
-                    NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, cac, timestamp, ran, mLICH);
-                    layer3.setValid(NXDNCRC.checkCAC(payload));
-                    mMessages.add(layer3);
-                }
-                else
-                {
-                    message.xor(SCRAMBLE_SEQUENCE_CONTROL_INBOUND);
-                    CorrectedBinaryMessage payload = mLICH.isLongCAC() ? decodeLongCAC(message) : decodeShortCAC(message);
-                    int ran = payload.getInt(RADIO_ACCESS_NUMBER);
-                    CorrectedBinaryMessage cac = mLICH.isLongCAC() ? payload.getSubMessage(8, 136) : payload.getSubMessage(8, 104);
-                    cac.setCorrectedBitCount(payload.getCorrectedBitCount());
-                    NXDNMessageType type = NXDNMessageType.getControl(cac, mLICH);
-                    NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, cac, timestamp, ran, mLICH);
-                    layer3.setValid(mLICH.isLongCAC() ? NXDNCRC.checkLongCAC(payload) : NXDNCRC.checkShortCAC(payload));
-                    mMessages.add(layer3);
-                }
-                break;
-            default: //RDCH, RTCH and RTCH2
-                message.xor(SCRAMBLE_SEQUENCE_FULL);
-
-                if(mLICH.hasSACCH()) //SACCH + Voice/FACCH frames
-                {
-                    CorrectedBinaryMessage sacch = decodeSACCH(message);
-                    SACCHFragment sacchFragment = new SACCHFragment(sacch, timestamp, mLICH);
-                    sacchFragment.setValid(NXDNCRC.checkSACCH(sacch));
-                    mMessages.add(sacchFragment);
-
-                    if(mLICH.hasAudio())
-                    {
-                        List<byte[]> frames = new ArrayList<>();
-
-                        if(mLICH.isVoiceFirst())
-                        {
-                            frames.add(message.getSubMessage(76, 148).toByteArray());
-                            frames.add(message.getSubMessage(148, 220).toByteArray());
-                        }
-
-                        if(mLICH.isVoiceSecond())
-                        {
-                            frames.add(message.getSubMessage(220, 292).toByteArray());
-                            frames.add(message.getSubMessage(292, 364).toByteArray());
-                        }
-
-                        mMessages.add(new Audio(AudioCodec.HALF_RATE, frames, timestamp, sacchFragment.getRAN(), sacchFragment.getLICH()));
-                    }
-
-                    if(mLICH.isFACCH1First())
-                    {
-                        CorrectedBinaryMessage payload = decodeFACCH1First(message);
-                        NXDNMessageType type = NXDNMessageType.getTraffic(payload, mLICH);
-                        NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, payload, timestamp, sacchFragment.getRAN(), mLICH);
-                        layer3.setValid(NXDNCRC.checkFACCH1(payload));
-                        mMessages.add(layer3);
-                    }
-
-                    if(mLICH.isFACCH1Second())
-                    {
-                        CorrectedBinaryMessage payload = decodeFACCH1Second(message);
-                        NXDNMessageType type = NXDNMessageType.getTraffic(payload, mLICH);
-                        NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, payload, timestamp, sacchFragment.getRAN(), mLICH);
-                        layer3.setValid(NXDNCRC.checkFACCH1(payload));
-                        mMessages.add(layer3);
-                    }
-                }
-                else if(mLICH.hasSCCH()) //Type-D segments with SCCH
-                {
-                    CorrectedBinaryMessage scch = decodeSCCH(message);
-                    NXDNMessageType typeSCCH = NXDNMessageType.getSCCH(scch, mLICH);
-                    NXDNLayer3Message scchMessage = NXDNMessageFactory.get(typeSCCH, scch, timestamp, RAN_TYPE_D, mLICH);
-                    scchMessage.setValid(NXDNCRC.checkSCCH(scch));
-                    mMessages.add(scchMessage);
-
-                    if(mLICH.isFACCH1First())
-                    {
-                        CorrectedBinaryMessage payload = decodeFACCH1First(message);
-                        NXDNMessageType type = NXDNMessageType.getTypeD(payload, mLICH);
-                        NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, payload, timestamp, RAN_TYPE_D, mLICH);
-                        layer3.setValid(NXDNCRC.checkFACCH1(payload));
-                        mMessages.add(layer3);
-                    }
-
-                    if(mLICH.isFACCH1Second())
-                    {
-                        CorrectedBinaryMessage payload = decodeFACCH1Second(message);
-                        NXDNMessageType type = NXDNMessageType.getTypeD(payload, mLICH);
-                        NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, payload, timestamp, RAN_TYPE_D, mLICH);
-                        layer3.setValid(NXDNCRC.checkFACCH1(payload));
-                        mMessages.add(layer3);
-                    }
-
-                    if(mLICH.isData()) //FACCH3 or UDCH2
-                    {
-                        CorrectedBinaryMessage payloadA = decodeUDCH2AndFACCH3A(message);
-                        CorrectedBinaryMessage payloadB = decodeUDCH2AndFACCH3B(message);
-                        boolean validA = NXDNCRC.checkFACCH3(payloadA);
-                        boolean validB = NXDNCRC.checkFACCH3(payloadB);
-                        CorrectedBinaryMessage combined = new CorrectedBinaryMessage(160);
-                        NXDNMessageType type = NXDNMessageType.getTypeD(combined, mLICH);
-                        NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, combined, timestamp, RAN_TYPE_D, mLICH);
-                        layer3.setValid(validA && validB);
-                        mMessages.add(layer3);
-                    }
-
-                    if(mLICH.hasAudio())
-                    {
-                        List<byte[]> frames = new ArrayList<>();
-
-                        if(mLICH.isVoiceFirst())
-                        {
-                            frames.add(message.getSubMessage(76, 148).toByteArray());
-                            frames.add(message.getSubMessage(148, 220).toByteArray());
-                        }
-
-                        if(mLICH.isVoiceSecond())
-                        {
-                            frames.add(message.getSubMessage(220, 292).toByteArray());
-                            frames.add(message.getSubMessage(292, 364).toByteArray());
-                        }
-
-                        mMessages.add(new Audio(AudioCodec.HALF_RATE, frames, timestamp, RAN_TYPE_D, mLICH));
-                    }
-                }
-                else if(mLICH.getRFChannel() != RFChannel.RTCH2) //UDCH or FACCH2 frames on non-Type-D
-                {
-                    CorrectedBinaryMessage payload = decodeUDCHAndFACCH2(message);
-                    int ran = payload.getInt(RADIO_ACCESS_NUMBER);
-                    CorrectedBinaryMessage facch2 = payload.getSubMessage(8, 184);
-                    facch2.setCorrectedBitCount(payload.getCorrectedBitCount());
-                    NXDNMessageType type = NXDNMessageType.getTraffic(facch2, mLICH);
-                    NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, facch2, timestamp, ran, mLICH);
-                    layer3.setValid(NXDNCRC.checkFACCH2(payload));
-                    mMessages.add(layer3);
-                }
-
-                break;
+            if(mLICH.isOutbound())
+            {
+                message.xor(SCRAMBLE_SEQUENCE_CONTROL_OUTBOUND);
+                CorrectedBinaryMessage payload = decodeCAC(message);
+                int ran = payload.getInt(RADIO_ACCESS_NUMBER);
+                CorrectedBinaryMessage cac = payload.getSubMessage(8, 152);
+                cac.setCorrectedBitCount(payload.getCorrectedBitCount());
+                NXDNMessageType type = NXDNMessageType.getControl(cac, mLICH);
+                NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, cac, timestamp, ran, mLICH);
+                layer3.setValid(NXDNCRC.checkCAC(payload));
+                mMessages.add(layer3);
+            }
+            else
+            {
+                message.xor(SCRAMBLE_SEQUENCE_CONTROL_INBOUND);
+                CorrectedBinaryMessage payload = mLICH.isLongCAC() ? decodeLongCAC(message) : decodeShortCAC(message);
+                int ran = payload.getInt(RADIO_ACCESS_NUMBER);
+                CorrectedBinaryMessage cac = mLICH.isLongCAC() ? payload.getSubMessage(8, 136) : payload.getSubMessage(8, 104);
+                cac.setCorrectedBitCount(payload.getCorrectedBitCount());
+                NXDNMessageType type = NXDNMessageType.getControl(cac, mLICH);
+                NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, cac, timestamp, ran, mLICH);
+                layer3.setValid(mLICH.isLongCAC() ? NXDNCRC.checkLongCAC(payload) : NXDNCRC.checkShortCAC(payload));
+                mMessages.add(layer3);
+            }
         }
+        else
+        {
+            message.xor(SCRAMBLE_SEQUENCE_FULL);
+
+            if(mLICH.hasSACCH()) //SACCH + Voice/FACCH frames
+            {
+                CorrectedBinaryMessage sacch = decodeSACCH(message);
+                SACCHFragment sacchFragment = new SACCHFragment(sacch, timestamp, mLICH);
+                sacchFragment.setValid(NXDNCRC.checkSACCH(sacch));
+                mMessages.add(sacchFragment);
+
+                if(mLICH.hasAudio())
+                {
+                    List<byte[]> frames = new ArrayList<>();
+
+                    if(mLICH.isVoiceFirst())
+                    {
+                        frames.add(message.getSubMessage(76, 148).toByteArray());
+                        frames.add(message.getSubMessage(148, 220).toByteArray());
+                    }
+
+                    if(mLICH.isVoiceSecond())
+                    {
+                        frames.add(message.getSubMessage(220, 292).toByteArray());
+                        frames.add(message.getSubMessage(292, 364).toByteArray());
+                    }
+
+                    mMessages.add(new Audio(AudioCodec.HALF_RATE, frames, timestamp, sacchFragment.getRAN(), sacchFragment.getLICH()));
+                }
+
+                if(mLICH.isFACCH1First())
+                {
+                    CorrectedBinaryMessage payload = decodeFACCH1First(message);
+                    NXDNMessageType type = NXDNMessageType.getTraffic(payload, mLICH);
+                    NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, payload, timestamp, sacchFragment.getRAN(), mLICH);
+                    layer3.setValid(NXDNCRC.checkFACCH1(payload));
+                    mMessages.add(layer3);
+                }
+
+                if(mLICH.isFACCH1Second())
+                {
+                    CorrectedBinaryMessage payload = decodeFACCH1Second(message);
+                    NXDNMessageType type = NXDNMessageType.getTraffic(payload, mLICH);
+                    NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, payload, timestamp, sacchFragment.getRAN(), mLICH);
+                    layer3.setValid(NXDNCRC.checkFACCH1(payload));
+                    mMessages.add(layer3);
+                }
+            }
+            else if(mLICH.hasSCCH()) //Type-D segments with SCCH
+            {
+                CorrectedBinaryMessage scch = decodeSCCH(message);
+                NXDNMessageType typeSCCH = NXDNMessageType.getSCCH(scch, mLICH);
+                NXDNLayer3Message scchMessage = NXDNMessageFactory.get(typeSCCH, scch, timestamp, RAN_TYPE_D, mLICH);
+                scchMessage.setValid(NXDNCRC.checkSCCH(scch));
+                mMessages.add(scchMessage);
+
+                if(mLICH.isFACCH1First())
+                {
+                    CorrectedBinaryMessage payload = decodeFACCH1First(message);
+                    NXDNMessageType type = NXDNMessageType.getTypeD(payload, mLICH);
+                    NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, payload, timestamp, RAN_TYPE_D, mLICH);
+                    layer3.setValid(NXDNCRC.checkFACCH1(payload));
+                    mMessages.add(layer3);
+                }
+
+                if(mLICH.isFACCH1Second())
+                {
+                    CorrectedBinaryMessage payload = decodeFACCH1Second(message);
+                    NXDNMessageType type = NXDNMessageType.getTypeD(payload, mLICH);
+                    NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, payload, timestamp, RAN_TYPE_D, mLICH);
+                    layer3.setValid(NXDNCRC.checkFACCH1(payload));
+                    mMessages.add(layer3);
+                }
+
+                if(mLICH.isData()) //FACCH3 or UDCH2
+                {
+                    CorrectedBinaryMessage payloadA = decodeUDCH2AndFACCH3A(message);
+                    CorrectedBinaryMessage payloadB = decodeUDCH2AndFACCH3B(message);
+                    boolean validA = NXDNCRC.checkFACCH3(payloadA);
+                    boolean validB = NXDNCRC.checkFACCH3(payloadB);
+                    CorrectedBinaryMessage combined = new CorrectedBinaryMessage(160);
+                    NXDNMessageType type = NXDNMessageType.getTypeD(combined, mLICH);
+                    NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, combined, timestamp, RAN_TYPE_D, mLICH);
+                    layer3.setValid(validA && validB);
+                    mMessages.add(layer3);
+                }
+
+                if(mLICH.hasAudio())
+                {
+                    List<byte[]> frames = new ArrayList<>();
+
+                    if(mLICH.isVoiceFirst())
+                    {
+                        frames.add(message.getSubMessage(76, 148).toByteArray());
+                        frames.add(message.getSubMessage(148, 220).toByteArray());
+                    }
+
+                    if(mLICH.isVoiceSecond())
+                    {
+                        frames.add(message.getSubMessage(220, 292).toByteArray());
+                        frames.add(message.getSubMessage(292, 364).toByteArray());
+                    }
+
+                    mMessages.add(new Audio(AudioCodec.HALF_RATE, frames, timestamp, RAN_TYPE_D, mLICH));
+                }
+            }
+            else if(mLICH.getRFChannel() != RFChannel.RTCH2) //UDCH or FACCH2 frames on non-Type-D
+            {
+                CorrectedBinaryMessage payload = decodeUDCHAndFACCH2(message);
+                int ran = payload.getInt(RADIO_ACCESS_NUMBER);
+                CorrectedBinaryMessage facch2 = payload.getSubMessage(8, 184);
+                facch2.setCorrectedBitCount(payload.getCorrectedBitCount());
+                NXDNMessageType type = NXDNMessageType.getTraffic(facch2, mLICH);
+                NXDNLayer3Message layer3 = NXDNMessageFactory.get(type, facch2, timestamp, ran, mLICH);
+                layer3.setValid(NXDNCRC.checkFACCH2(payload));
+                mMessages.add(layer3);
+            }
+        }
+    }
+
+    /**
+     * Indicates if the LICH field passes the even parity check.
+     * @param message to test
+     * @return true if the parity check passes.
+     */
+    private static boolean checkLICHParity(CorrectedBinaryMessage message)
+    {
+        int onesBitCount = Integer.bitCount(message.getInt(LICH_PARITY_FIELD));
+        return (onesBitCount % 2 == 1) == message.get(LICH_EVEN_PARITY_CHECK_BIT);
     }
 
     /**

@@ -55,6 +55,14 @@ public enum TransmissionMode
         return mSymbolRate;
     }
 
+    /**
+     * Indicates if this mode is Type D
+     */
+    public boolean isTypeD()
+    {
+        return this == TransmissionMode.TYPE_D;
+    }
+
     @Override
     public String toString()
     {
