@@ -1,20 +1,23 @@
-/*******************************************************************************
- * sdr-trunk
- * Copyright (C) 2014-2019 Dennis Sheirer
+/*
+ * *****************************************************************************
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
- * This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public
- * License as published by  the Free Software Foundation, either version 3 of the License, or  (at your option) any
- * later version.
+ * This program is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
  *
- * This program is distributed in the hope that it will be useful,  but WITHOUT ANY WARRANTY; without even the implied
- * warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for more details.
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
  *
- * You should have received a copy of the GNU General Public License  along with this program.
- * If not, see <http://www.gnu.org/licenses/>
- *
- ******************************************************************************/
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>
+ * ****************************************************************************
+ */
 
-package io.github.dsheirer.module.decode.p25.audio;
+package io.github.dsheirer.audio.codec.mbe;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
@@ -27,7 +30,7 @@ import com.fasterxml.jackson.annotation.JsonRootName;
  */
 @JsonRootName(value = "frame")
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({"encryption_algorithm", "encryption_key_id", "encryption_mi", "time", "hex"})
+@JsonPropertyOrder({"encryption_algorithm", "encryption_key_id", "encryption_mi", "time", "hex", "tag"})
 public class VoiceFrame
 {
     private long mTimestamp;
@@ -35,6 +38,7 @@ public class VoiceFrame
     private Integer mAlgorithm;
     private Integer mKeyId;
     private String mMessageIndicator;
+    private String mTag;
 
     public VoiceFrame()
     {
@@ -68,6 +72,24 @@ public class VoiceFrame
         mAlgorithm = algorithm;
         mKeyId = keyid;
         mMessageIndicator = messageIndicator;
+    }
+
+    /**
+     * Tag value for the voice frame
+     */
+    @JsonProperty("tag")
+    public String getTag()
+    {
+        return mTag;
+    }
+
+    /**
+     * Sets the optional tag value for the frame
+     * @param tag to set
+     */
+    public void setTag(String tag)
+    {
+        mTag = tag;
     }
 
     /**

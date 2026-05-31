@@ -22,6 +22,7 @@ package io.github.dsheirer.module.decode.nxdn.audio;
 
 import io.github.dsheirer.audio.codec.mbe.MBECallSequence;
 import io.github.dsheirer.audio.codec.mbe.MBECallSequenceRecorder;
+import io.github.dsheirer.audio.codec.mbe.VoiceFrame;
 import io.github.dsheirer.bits.BinaryMessage;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.module.decode.nxdn.NXDNMessage;
@@ -196,13 +197,24 @@ public class NXDNCallSequenceRecorder extends MBECallSequenceRecorder
         List<byte[]> voiceFrames = audio.getAudioFrames();
         long timestamp = audio.getTimestamp();
 
-        for(byte[] frame : voiceFrames)
+        for(int frame = 0; frame < voiceFrames.size(); frame++)
         {
-            BinaryMessage frameBits = BinaryMessage.from(frame);
-            getCallSequence().addVoiceFrame(timestamp, frameBits.toHexString());
-
-            //Voice frames are 20 milliseconds each, so we increment the timestamp by 20 for each one
-            timestamp += 20;
+            if(frame == 0)
+            {
+                BinaryMessage frameBits = BinaryMessage.from(voiceFrames.get(frame));
+                VoiceFrame voiceFrame = new VoiceFrame(timestamp, frameBits.toHexString());
+                voiceFrame.setTag(audio.getLICH().getStructure().toString());
+                getCallSequence().add(voiceFrame);
+                //Voice frames are 20 milliseconds each, so we increment the timestamp by 20 for each one
+                timestamp += 20;
+            }
+            else
+            {
+                BinaryMessage frameBits = BinaryMessage.from(voiceFrames.get(frame));
+                getCallSequence().addVoiceFrame(timestamp, frameBits.toHexString());
+                //Voice frames are 20 milliseconds each, so we increment the timestamp by 20 for each one
+                timestamp += 20;
+            }
         }
     }
 }
