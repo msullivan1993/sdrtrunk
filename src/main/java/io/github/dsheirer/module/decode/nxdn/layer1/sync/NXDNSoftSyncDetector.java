@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,23 +17,23 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.nxdn.layer1.sync.standard;
+package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
 import java.util.Arrays;
 
 /**
  * NXDN Sync Detector.  Uses soft demodulated symbols to detect sync patterns in the demodulated symbol stream.
  */
-public abstract class NXDNStandardSoftSyncDetector extends NXDNStandardSyncDetector
+public abstract class NXDNSoftSyncDetector extends NXDNSyncDetector
 {
     //symbol buffer is extended by 6x to support SIMD 512 calculations
-    protected float[] mSymbols = new float[STANDARD_SYNC_DIBIT_LENGTH * 2 + 6];
+    protected float[] mSymbols = new float[SYNC_DIBIT_LENGTH * 2 + 6];
     protected int mSymbolPointer = 0;
 
     /**
      * Constructs an instance
      */
-    public NXDNStandardSoftSyncDetector()
+    public NXDNSoftSyncDetector()
     {
     }
 
@@ -63,9 +63,9 @@ public abstract class NXDNStandardSoftSyncDetector extends NXDNStandardSyncDetec
     public float process(float dibitSymbol)
     {
         mSymbols[mSymbolPointer] = dibitSymbol;
-        mSymbols[mSymbolPointer + STANDARD_SYNC_DIBIT_LENGTH] = dibitSymbol;
+        mSymbols[mSymbolPointer + SYNC_DIBIT_LENGTH] = dibitSymbol;
         mSymbolPointer++;
-        mSymbolPointer %= STANDARD_SYNC_DIBIT_LENGTH;
+        mSymbolPointer %= SYNC_DIBIT_LENGTH;
         return calculate();
     }
 }

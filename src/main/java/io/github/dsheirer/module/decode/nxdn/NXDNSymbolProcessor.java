@@ -27,10 +27,10 @@ import io.github.dsheirer.gui.viewer.sync.FMSyncResultsViewer;
 import io.github.dsheirer.gui.viewer.sync.ISyncResultsListener;
 import io.github.dsheirer.module.decode.FeedbackDecoder;
 import io.github.dsheirer.module.decode.nxdn.layer1.C4FMEqualizer;
+import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSoftSyncDetector;
 import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSyncDetector;
 import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSyncDetectorFactory;
 import io.github.dsheirer.module.decode.nxdn.layer1.sync.ReferenceSyncWaveform;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardSoftSyncDetector;
 import io.github.dsheirer.sample.Listener;
 import java.nio.ByteBuffer;
 import java.text.DecimalFormat;
@@ -60,8 +60,8 @@ public class NXDNSymbolProcessor
     private final DibitToByteBufferAssembler mDibitAssembler = new DibitToByteBufferAssembler(300);
     private final FeedbackDecoder mFeedbackDecoder;
     private final NXDNMessageFramer mMessageFramer;
-    private final NXDNStandardSoftSyncDetector mSyncDetector = NXDNSyncDetectorFactory.getStandardDetector();
-    private final NXDNStandardSoftSyncDetector mSyncDetectorLagging = NXDNSyncDetectorFactory.getStandardDetector();
+    private final NXDNSoftSyncDetector mSyncDetector = NXDNSyncDetectorFactory.getStandardDetector();
+    private final NXDNSoftSyncDetector mSyncDetectorLagging = NXDNSyncDetectorFactory.getStandardDetector();
     private final SampleEqualizer mSampleEqualizer = new SampleEqualizer();
     private final C4FMEqualizer mSymbolEqualizer;
     private final SyncTracker mSyncTracker = new SyncTracker(2400, 3);
@@ -85,7 +85,7 @@ public class NXDNSymbolProcessor
     private int mDelayedSyncDetectionSymbolsRemaining = 0;
     private ReferenceSyncWaveform mReferenceSyncWaveform;
     private final boolean mVisualize = false;
-    private final int mDebugSymbolStart = 130000; //1890 is actual start of modulation
+    private final int mDebugSymbolStart = 200;
     private static final DecimalFormat DF = new DecimalFormat("00.000");
 
 
@@ -387,7 +387,7 @@ public class NXDNSymbolProcessor
     public void setSamplesPerSymbol(float samplesPerSymbol)
     {
         mSamplesPerSymbol = samplesPerSymbol;
-        mTimingCorrectionThreshold = samplesPerSymbol / 15;
+        mTimingCorrectionThreshold = samplesPerSymbol / 30;
         mNoiseStandardDeviationThreshold = .2;
         mSamplePoint = samplesPerSymbol;
         mSamplePointAdjustmentMax = samplesPerSymbol / 2;
@@ -1046,7 +1046,7 @@ public class NXDNSymbolProcessor
             //Re-initialize the equalizer any time the balance correction value exceeds the threshold.
             if(mSynchronized && Math.abs(remainingBalanceToCorrect) > EQUALIZER_RECALIBRATE_THRESHOLD)
             {
-                System.out.println("\t\t ***** RESETTING DUE TO EXCESSIVE GAIN IMBALANCE ******* " + remainingBalanceToCorrect);
+//                System.out.println("\t\t ***** RESETTING DUE TO EXCESSIVE GAIN IMBALANCE ******* " + remainingBalanceToCorrect);
                 reset();
             }
 

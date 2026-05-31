@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,19 +17,13 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.nxdn.layer1.sync.control;
-
-import jdk.incubator.vector.FloatVector;
-import jdk.incubator.vector.VectorOperators;
-import jdk.incubator.vector.VectorSpecies;
+package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
 /**
- * Vector implementation of long control soft sync detector.
+ * Scalar implementation of NXDN Soft Sync Detector.
  */
-public class NXDNControlSoftSyncDetectorVector64 extends NXDNControlSoftSyncDetector
+public class NXDNSoftSyncDetectorScalar extends NXDNSoftSyncDetector
 {
-    private static final VectorSpecies<Float> VECTOR_SPECIES = FloatVector.SPECIES_64;
-
     /**
      * Processes the demodulated soft symbol value and returns a correlation value against the preceding 24 soft
      * symbols that include this recent soft symbol.
@@ -38,14 +32,15 @@ public class NXDNControlSoftSyncDetectorVector64 extends NXDNControlSoftSyncDete
      */
     public float calculate()
     {
-        FloatVector accumulator = FloatVector.zero(VECTOR_SPECIES);
+        float symbol;
+        float score = 0;
 
-        for(int x = 0; x < 22; x += VECTOR_SPECIES.length())
+        for(int x = 0; x < SYNC_DIBIT_LENGTH; x++)
         {
-            accumulator = FloatVector.fromArray(VECTOR_SPECIES, SYMBOLS, x)
-                    .fma(FloatVector.fromArray(VECTOR_SPECIES, mSymbols, mSymbolPointer + x), accumulator);
+            symbol = mSymbols[mSymbolPointer + x];
+            score += SYMBOLS[x] * symbol;
         }
 
-        return accumulator.reduceLanes(VectorOperators.ADD);
+        return score;
     }
 }

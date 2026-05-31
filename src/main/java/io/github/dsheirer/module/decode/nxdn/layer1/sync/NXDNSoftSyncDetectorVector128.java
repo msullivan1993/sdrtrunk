@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,30 +17,25 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.nxdn.layer1.sync.control;
+package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
 
 /**
- * Vector implementation of long control soft sync detector.
+ * SIMD Vector 128 implementation of NXDN Soft Sync Detector.
  */
-public class NXDNControlSoftSyncDetectorVector256 extends NXDNControlSoftSyncDetector
+public class NXDNSoftSyncDetectorVector128 extends NXDNSoftSyncDetector
 {
-    private static final VectorSpecies<Float> VECTOR_SPECIES = FloatVector.SPECIES_256;
-    private static final float[] SYNC_EXTENDED = new float[8];
+    private static final VectorSpecies<Float> VECTOR_SPECIES = FloatVector.SPECIES_128;
+    private static final float[] SYNC_EXTENDED = new float[4];
 
-    static
+    public NXDNSoftSyncDetectorVector128()
     {
-        //Create an array of 8x elements containing the final 6x symbols for SIMD loading.  Leave indices 0 and 1 at
-        //default zero so that the overlap doesn't contribute to the count.
-        SYNC_EXTENDED[2] = SYMBOLS[16];
-        SYNC_EXTENDED[3] = SYMBOLS[17];
-        SYNC_EXTENDED[4] = SYMBOLS[18];
-        SYNC_EXTENDED[5] = SYMBOLS[19];
-        SYNC_EXTENDED[6] = SYMBOLS[20];
-        SYNC_EXTENDED[7] = SYMBOLS[21];
+        //Create an array of 4x elements containing the final 2x symbols for SIMD loading.
+        SYNC_EXTENDED[2] = SYMBOLS[8];
+        SYNC_EXTENDED[3] = SYMBOLS[9];
     }
 
     /**
@@ -54,10 +49,10 @@ public class NXDNControlSoftSyncDetectorVector256 extends NXDNControlSoftSyncDet
         FloatVector accumulator = FloatVector.zero(VECTOR_SPECIES);
         accumulator = FloatVector.fromArray(VECTOR_SPECIES, SYMBOLS, 0)
                 .fma(FloatVector.fromArray(VECTOR_SPECIES, mSymbols, mSymbolPointer), accumulator);
-        accumulator = FloatVector.fromArray(VECTOR_SPECIES, SYMBOLS, 8)
-                .fma(FloatVector.fromArray(VECTOR_SPECIES, mSymbols, mSymbolPointer + 8), accumulator);
+        accumulator = FloatVector.fromArray(VECTOR_SPECIES, SYMBOLS, 4)
+                .fma(FloatVector.fromArray(VECTOR_SPECIES, mSymbols, mSymbolPointer + 4), accumulator);
         accumulator = FloatVector.fromArray(VECTOR_SPECIES, SYNC_EXTENDED, 0)
-                .fma(FloatVector.fromArray(VECTOR_SPECIES, mSymbols, mSymbolPointer + 14), accumulator);
+                .fma(FloatVector.fromArray(VECTOR_SPECIES, mSymbols, mSymbolPointer + 6), accumulator);
         return accumulator.reduceLanes(VectorOperators.ADD);
     }
 }

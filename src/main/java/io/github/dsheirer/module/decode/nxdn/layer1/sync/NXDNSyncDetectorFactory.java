@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,18 +19,6 @@
 
 package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetector;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorScalar;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorVector128;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorVector256;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorVector512;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorVector64;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardSoftSyncDetector;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardSoftSyncDetectorScalar;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardSoftSyncDetectorVector128;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardSoftSyncDetectorVector256;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardSoftSyncDetectorVector512;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.standard.NXDNStandardSoftSyncDetectorVector64;
 import io.github.dsheirer.vector.calibrate.CalibrationManager;
 import io.github.dsheirer.vector.calibrate.CalibrationType;
 import io.github.dsheirer.vector.calibrate.Implementation;
@@ -48,47 +36,23 @@ public class NXDNSyncDetectorFactory
      * Creates the implementation using calibration data to select the optimal implementation from scalar and vector options.
      * @return demodulator instance
      */
-    public static NXDNStandardSoftSyncDetector getStandardDetector()
+    public static NXDNSoftSyncDetector getStandardDetector()
     {
         Implementation implementation = CalibrationManager.getInstance().getImplementation(CalibrationType.NXDN_SOFT_SYNC_DETECTOR);
 
         switch(implementation)
         {
             case VECTOR_SIMD_64:
-                return new NXDNStandardSoftSyncDetectorVector64();
+                return new NXDNSoftSyncDetectorVector64();
             case VECTOR_SIMD_128:
-                return new NXDNStandardSoftSyncDetectorVector128();
+                return new NXDNSoftSyncDetectorVector128();
             case VECTOR_SIMD_256:
-                return new NXDNStandardSoftSyncDetectorVector256();
+                return new NXDNSoftSyncDetectorVector256();
             case VECTOR_SIMD_512:
-                return new NXDNStandardSoftSyncDetectorVector512();
+                return new NXDNSoftSyncDetectorVector512();
             case SCALAR:
             default:
-                return new NXDNStandardSoftSyncDetectorScalar();
-        }
-    }
-
-    /**
-     * Creates the implementation using calibration data to select the optimal implementation from scalar and vector options.
-     * @return demodulator instance
-     */
-    public static NXDNControlSoftSyncDetector getControlDetector()
-    {
-        Implementation implementation = CalibrationManager.getInstance().getImplementation(CalibrationType.NXDN_SOFT_SYNC_DETECTOR);
-
-        switch(implementation)
-        {
-            case VECTOR_SIMD_64:
-                return new NXDNControlSoftSyncDetectorVector64();
-            case VECTOR_SIMD_128:
-                return new NXDNControlSoftSyncDetectorVector128();
-            case VECTOR_SIMD_256:
-                return new NXDNControlSoftSyncDetectorVector256();
-            case VECTOR_SIMD_512:
-                return new NXDNControlSoftSyncDetectorVector512();
-            case SCALAR:
-            default:
-                return new NXDNControlSoftSyncDetectorScalar();
+                return new NXDNSoftSyncDetectorScalar();
         }
     }
 }

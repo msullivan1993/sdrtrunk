@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,22 +17,22 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.nxdn.layer1.sync.control;
+package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
 import io.github.dsheirer.dsp.symbol.Dibit;
 
 /**
- * NXDN standard sync pattern detector that processes hard symbol (ie dibit) decisions.
+ * NXDN sync pattern detector that processes hard symbol (ie dibit) decisions.
  */
-public class NXDNControlHardSyncDetector extends NXDNControlSyncDetector
+public class NXDNHardSyncDetector extends NXDNSyncDetector
 {
-    private static final int MAXIMUM_BIT_ERROR = 4;
+    private static final int MAXIMUM_BIT_ERROR = 2;
     private long mValue;
 
     /**
      * Constructs an instance
      */
-    public NXDNControlHardSyncDetector()
+    public NXDNHardSyncDetector()
     {
     }
 
@@ -44,7 +44,16 @@ public class NXDNControlHardSyncDetector extends NXDNControlSyncDetector
      */
     public boolean process(Dibit dibit)
     {
-        mValue = (Long.rotateLeft(mValue, 2) & CONTROL_SYNC_MASK) + dibit.getValue();
-        return Long.bitCount(mValue ^ CONTROL_SYNC_PATTERN) <= MAXIMUM_BIT_ERROR;
+        mValue = (Long.rotateLeft(mValue, 2) & SYNC_MASK) + dibit.getValue();
+        return Long.bitCount(mValue ^ SYNC_PATTERN) <= MAXIMUM_BIT_ERROR;
+    }
+
+
+    /**
+     * Bit error count when comparing the current buffer contents to the known sync pattern.
+     */
+    public int getCurrentBitErrors()
+    {
+        return Long.bitCount(mValue ^ SYNC_PATTERN);
     }
 }

@@ -121,7 +121,6 @@ public class Audio extends NXDNMessage
             CorrectedBinaryMessage modulationVector = getModulationVector(vc0.getInt(VECTOR_U0));
             vc1.xor(modulationVector);
             int error2 = Golay23.checkAndCorrect(vc1, 0);
-            System.out.println("Errors - 1:" + error1 + " 2:" + error2);
             return error2 < 4;
         }
 

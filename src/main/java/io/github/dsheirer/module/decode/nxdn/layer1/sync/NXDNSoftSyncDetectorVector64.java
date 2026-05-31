@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,13 +17,19 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.nxdn.layer1.sync.standard;
+package io.github.dsheirer.module.decode.nxdn.layer1.sync;
+
+import jdk.incubator.vector.FloatVector;
+import jdk.incubator.vector.VectorOperators;
+import jdk.incubator.vector.VectorSpecies;
 
 /**
- * Scalar implementation of NXDN Soft Sync Detector.
+ * SIMD Vector 64 implementation of NXDN Soft Sync Detector.
  */
-public class NXDNStandardSoftSyncDetectorScalar extends NXDNStandardSoftSyncDetector
+public class NXDNSoftSyncDetectorVector64 extends NXDNSoftSyncDetector
 {
+    private static final VectorSpecies<Float> VECTOR_SPECIES = FloatVector.SPECIES_64;
+
     /**
      * Processes the demodulated soft symbol value and returns a correlation value against the preceding 24 soft
      * symbols that include this recent soft symbol.
@@ -32,15 +38,14 @@ public class NXDNStandardSoftSyncDetectorScalar extends NXDNStandardSoftSyncDete
      */
     public float calculate()
     {
-        float symbol;
-        float score = 0;
+        FloatVector accumulator = FloatVector.zero(VECTOR_SPECIES);
 
-        for(int x = 0; x < STANDARD_SYNC_DIBIT_LENGTH; x++)
+        for(int x = 0; x < SYNC_DIBIT_LENGTH; x += VECTOR_SPECIES.length())
         {
-            symbol = mSymbols[mSymbolPointer + x];
-            score += SYMBOLS[x] * symbol;
+            accumulator = FloatVector.fromArray(VECTOR_SPECIES, SYMBOLS, x)
+                    .fma(FloatVector.fromArray(VECTOR_SPECIES, mSymbols, mSymbolPointer + x), accumulator);
         }
 
-        return score;
+        return accumulator.reduceLanes(VectorOperators.ADD);
     }
 }

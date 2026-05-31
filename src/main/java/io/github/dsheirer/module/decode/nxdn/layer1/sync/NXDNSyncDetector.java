@@ -30,24 +30,38 @@ import org.apache.commons.math3.analysis.polynomials.PolynomialSplineFunction;
  */
 public abstract class NXDNSyncDetector
 {
+    public static final long SYNC_PATTERN = 0xCDF59;
+    public static final long SYNC_MASK = 0xFFFFF;
+    public static final int SYNC_DIBIT_LENGTH = 10;
+    private static final Dibit[] DIBITS = toDibits(SYNC_PATTERN, SYNC_DIBIT_LENGTH);
+    protected static final float[] SYMBOLS = toSymbols(DIBITS);
     private static Map<Integer,ReferenceSyncWaveform> sReferenceWaveformMap = new TreeMap<>();
 
     /**
      * Sync pattern length in dibits.
      */
-    public abstract int getSyncPatternDibitLength();
+    public int getSyncPatternDibitLength()
+    {
+        return SYNC_DIBIT_LENGTH;
+    }
 
     /**
      * Dibits array for the sync pattern
      * @return dibits array.
      */
-    public abstract Dibit[] getSyncDibits();
+    public Dibit[] getSyncDibits()
+    {
+        return DIBITS;
+    }
 
     /**
      * Symbols array for the sync pattern.
      * @return array of (ideal) soft symbol values.
      */
-    public abstract float[] getSyncSymbols();
+    public float[] getSyncSymbols()
+    {
+        return SYMBOLS;
+    }
 
     /**
      * Converts the sync pattern to dibits.

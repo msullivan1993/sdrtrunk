@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.nxdn.layer1.sync.standard;
+package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
 import java.util.Arrays;
 import jdk.incubator.vector.FloatVector;
@@ -27,7 +27,7 @@ import jdk.incubator.vector.VectorSpecies;
 /**
  * SIMD Vector 512 implementation of NXDN Soft Sync Detector.
  */
-public class NXDNStandardSoftSyncDetectorVector512 extends NXDNStandardSoftSyncDetector
+public class NXDNSoftSyncDetectorVector512 extends NXDNSoftSyncDetector
 {
     private static final VectorSpecies<Float> VECTOR_SPECIES = FloatVector.SPECIES_512;
     //Extend the symbols out to 16x using zero padding after the 10th symbol

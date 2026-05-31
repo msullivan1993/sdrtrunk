@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -19,12 +19,12 @@
 
 package io.github.dsheirer.vector.calibrate.sync;
 
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetector;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorScalar;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorVector128;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorVector256;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorVector512;
-import io.github.dsheirer.module.decode.nxdn.layer1.sync.control.NXDNControlSoftSyncDetectorVector64;
+import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSoftSyncDetector;
+import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSoftSyncDetectorScalar;
+import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSoftSyncDetectorVector128;
+import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSoftSyncDetectorVector256;
+import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSoftSyncDetectorVector512;
+import io.github.dsheirer.module.decode.nxdn.layer1.sync.NXDNSoftSyncDetectorVector64;
 import io.github.dsheirer.vector.calibrate.Calibration;
 import io.github.dsheirer.vector.calibrate.CalibrationException;
 import io.github.dsheirer.vector.calibrate.CalibrationType;
@@ -40,11 +40,11 @@ public class NXDNSoftSyncCalibration extends Calibration
     private static final int ITERATION_DURATION_MS = 1000;
     private static final int WARMUP_ITERATIONS = 5;
     private static final int TEST_ITERATIONS = 5;
-    private final NXDNControlSoftSyncDetector mScalarDetector = new NXDNControlSoftSyncDetectorScalar();
-    private final NXDNControlSoftSyncDetector mVectorDetector64 = new NXDNControlSoftSyncDetectorVector64();
-    private final NXDNControlSoftSyncDetector mVectorDetector128 = new NXDNControlSoftSyncDetectorVector128();
-    private final NXDNControlSoftSyncDetector mVectorDetector256 = new NXDNControlSoftSyncDetectorVector256();
-    private final NXDNControlSoftSyncDetector mVectorDetector512 = new NXDNControlSoftSyncDetectorVector512();
+    private final NXDNSoftSyncDetector mScalarDetector = new NXDNSoftSyncDetectorScalar();
+    private final NXDNSoftSyncDetector mVectorDetector64 = new NXDNSoftSyncDetectorVector64();
+    private final NXDNSoftSyncDetector mVectorDetector128 = new NXDNSoftSyncDetectorVector128();
+    private final NXDNSoftSyncDetector mVectorDetector256 = new NXDNSoftSyncDetectorVector256();
+    private final NXDNSoftSyncDetector mVectorDetector512 = new NXDNSoftSyncDetectorVector512();
 
     /**
      * Constructs an instance
@@ -274,19 +274,5 @@ public class NXDNSoftSyncCalibration extends Calibration
         }
 
         return count;
-    }
-
-    public static void main(String[] args)
-    {
-        NXDNSoftSyncCalibration calibration = new NXDNSoftSyncCalibration();
-
-        try
-        {
-            calibration.calibrate();
-        }
-        catch(Exception e)
-        {
-            mLog.error("Error during calibration", e);
-        }
     }
 }

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,32 +17,29 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.nxdn.layer1.sync.control;
+package io.github.dsheirer.module.decode.nxdn.layer1.sync;
 
 import jdk.incubator.vector.FloatVector;
 import jdk.incubator.vector.VectorOperators;
 import jdk.incubator.vector.VectorSpecies;
 
 /**
- * Vector implementation of long control soft sync detector.
+ * SIMD Vector 256 implementation of NXDN Soft Sync Detector.
  */
-public class NXDNControlSoftSyncDetectorVector512 extends NXDNControlSoftSyncDetector
+public class NXDNSoftSyncDetectorVector256 extends NXDNSoftSyncDetector
 {
-    private static final VectorSpecies<Float> VECTOR_SPECIES = FloatVector.SPECIES_512;
-    private static final float[] SYNC_EXTENDED = new float[16];
+    private static final VectorSpecies<Float> VECTOR_SPECIES = FloatVector.SPECIES_256;
+    private static final float[] SYNC_EXTENDED = new float[8];
 
-    static {
-        //Leave first 9 indices at default zero so the overlap doesn't contribute to the score.
-        SYNC_EXTENDED[10] = SYMBOLS[16];
-        SYNC_EXTENDED[11] = SYMBOLS[17];
-        SYNC_EXTENDED[12] = SYMBOLS[18];
-        SYNC_EXTENDED[13] = SYMBOLS[19];
-        SYNC_EXTENDED[14] = SYMBOLS[20];
-        SYNC_EXTENDED[15] = SYMBOLS[21];
+    public NXDNSoftSyncDetectorVector256()
+    {
+        //Create an array of 8x elements containing the final 2x symbols for SIMD loading.
+        SYNC_EXTENDED[2] = SYMBOLS[8];
+        SYNC_EXTENDED[3] = SYMBOLS[9];
     }
 
     /**
-     * Processes the demodulated soft symbol value and returns a correlation value against the preceding 24 soft
+     * Processes the demodulated soft symbol value and returns a correlation value against the preceding 10 soft
      * symbols that include this recent soft symbol.
      *
      * @return correlation score.
