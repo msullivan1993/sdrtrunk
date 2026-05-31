@@ -42,21 +42,16 @@ public class NXDNMessageFramer
 {
     private static final int FRAME_LENGTH_SYMBOL_COUNT = 192;
     private static final int SYNC_PATTERN_SYMBOL_LENGTH = 10;
-    private final NXDNStandardHardSyncDetector mHardSyncDetector = new NXDNStandardHardSyncDetector();
-    private boolean mSyncDetected = false;
-
     private static final double MILLISECONDS_PER_SYMBOL = 1.0 / 4800.0 / 1000.0;
-    private Listener<IMessage> mMessageListener;
-    private boolean mRunning = false;
-    private int mDibitCounter = 58; //Set to 1-greater than SYNC+NID to avoid triggering message assembly on startup
-    private NXDNFrameAssembler mMessageAssembler;
-    private int mDebugSymbolCount = 0;
-    private int mDibitSinceTimestampCounter = 0;
-    private long mReferenceTimestamp = 0;
     private final LICHTracker mLICHTracker;
-    private int mSymbolsSinceLastSync = 384;
+    private final Listener<IMessage> mMessageListener;
+    private final NXDNStandardHardSyncDetector mHardSyncDetector = new NXDNStandardHardSyncDetector();
     private final int mSymbolsPerSecond;
-    private final boolean mTypeD;
+    private NXDNFrameAssembler mMessageAssembler;
+    private int mDibitSinceTimestampCounter = 0;
+    private int mSymbolsSinceLastSync = 384;
+    private long mReferenceTimestamp = 0;
+
 
     /**
      * Constructs an instance
@@ -67,7 +62,6 @@ public class NXDNMessageFramer
     {
         mMessageListener = messageListener;
         mLICHTracker = new LICHTracker(transmissionMode);
-        mTypeD = transmissionMode == TransmissionMode.TYPE_D;
         mSymbolsPerSecond = transmissionMode.getSymbolRate();
     }
 
