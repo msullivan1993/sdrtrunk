@@ -203,7 +203,12 @@ public class NXDNCallSequenceRecorder extends MBECallSequenceRecorder
             {
                 BinaryMessage frameBits = BinaryMessage.from(voiceFrames.get(frame));
                 VoiceFrame voiceFrame = new VoiceFrame(timestamp, frameBits.toHexString());
-                voiceFrame.setTag(audio.getLICH().getStructure().toString());
+
+                if(audio.hasSACCHFragment())
+                {
+                    voiceFrame.setTag(audio.getSACCHFragment().getStructure().toString());
+                }
+
                 getCallSequence().add(voiceFrame);
                 //Voice frames are 20 milliseconds each, so we increment the timestamp by 20 for each one
                 timestamp += 20;

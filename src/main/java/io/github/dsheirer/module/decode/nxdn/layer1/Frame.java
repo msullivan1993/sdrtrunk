@@ -89,7 +89,6 @@ public class Frame
      * @param message with frame bits
      * @param timestamp for the frame.
      * @param tracker for accessing tracked RF channel type and direction.
-     * @param isTypeD to indicate if this is a Type-D system or a Standard system.
      */
     public Frame(CorrectedBinaryMessage message, long timestamp, LICHTracker tracker)
     {
@@ -165,7 +164,9 @@ public class Frame
                         frames.add(message.getSubMessage(292, 364).toByteArray());
                     }
 
-                    mMessages.add(new Audio(AudioCodec.HALF_RATE, frames, timestamp, sacchFragment.getRAN(), sacchFragment.getLICH()));
+                    Audio audio = new Audio(AudioCodec.HALF_RATE, frames, timestamp, sacchFragment.getRAN(), sacchFragment.getLICH());
+                    audio.setSACCHFragment(sacchFragment);
+                    mMessages.add(audio);
                 }
 
                 if(mLICH.isFACCH1First())

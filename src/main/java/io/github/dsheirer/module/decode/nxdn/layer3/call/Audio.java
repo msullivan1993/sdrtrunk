@@ -26,6 +26,7 @@ import io.github.dsheirer.edac.Golay23;
 import io.github.dsheirer.identifier.Identifier;
 import io.github.dsheirer.module.decode.nxdn.NXDNMessage;
 import io.github.dsheirer.module.decode.nxdn.layer2.LICH;
+import io.github.dsheirer.module.decode.nxdn.layer2.SACCHFragment;
 import io.github.dsheirer.module.decode.nxdn.layer3.type.AudioCodec;
 import io.github.dsheirer.util.ByteUtil;
 import java.nio.ByteOrder;
@@ -45,11 +46,12 @@ public class Audio extends NXDNMessage
 
     private final AudioCodec mAudioCodec;
     private final List<byte[]> mAudioFrames;
+    private SACCHFragment mSACCHFragment;
 
     /**
      * Constructs an instance
      *
-     * @param audio code used for the channel
+     * @param audioCodec code used for the channel
      * @param frames of raw AMBE audio
      * @param timestamp for the message
      * @param ran from the SR field
@@ -70,6 +72,30 @@ public class Audio extends NXDNMessage
         }
 
         setValid(valid);
+    }
+
+    /**
+     * Optional SACCH fragment
+     */
+    public SACCHFragment getSACCHFragment()
+    {
+        return mSACCHFragment;
+    }
+
+    /**
+     * Indicates if this audio has an optional SACCH fragment
+     */
+    public boolean hasSACCHFragment()
+    {
+        return mSACCHFragment != null;
+    }
+
+    /**
+     * Sets the optional SACCH fragment
+     */
+    public void setSACCHFragment(SACCHFragment fragment)
+    {
+        mSACCHFragment = fragment;
     }
 
     @Override
