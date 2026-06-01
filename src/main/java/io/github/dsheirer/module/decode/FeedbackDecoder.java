@@ -122,4 +122,14 @@ public abstract class FeedbackDecoder extends PrimaryDecoder implements ISourceE
             mSymbolListener.receive(symbol);
         }
     }
+
+    public String getEqualizerSettings()
+    {
+        return "Not implemented";
+    }
+
+    public void resetEqualizer()
+    {
+        //No-op, unless implemented in subclass.
+    }
 }

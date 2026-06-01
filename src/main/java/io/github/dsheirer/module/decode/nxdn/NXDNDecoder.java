@@ -87,6 +87,18 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
         mSymbolProcessor = new NXDNSymbolProcessor(mMessageFramer, this);
     }
 
+    @Override
+    public void resetEqualizer()
+    {
+        mSymbolProcessor.resetEqualizer();
+    }
+
+    @Override
+    public String getEqualizerSettings()
+    {
+        return mSymbolProcessor.getEqualizerSettings();
+    }
+
     /**
      * Preloads NXDN channel details passed from the control channel used to resolve channel frequency information
      * in traffic channel broadcast messaging.

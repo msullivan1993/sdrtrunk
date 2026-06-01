@@ -75,6 +75,21 @@ public class C4FMEqualizer
     }
 
     /**
+     * Description of the current tap values
+     */
+    public String getTapsDescription()
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append("<html>EQ Taps<br>");
+        for(int i = 0; i < mTaps.length; i++)
+        {
+            sb.append(i).append(": ").append(DF.format(mTaps[i])).append("<br>");
+        }
+
+        return sb.toString();
+    }
+
+    /**
      * Symbol processing delay.
      * @return processing delay in symbols.
      */
@@ -140,10 +155,12 @@ public class C4FMEqualizer
     /*
      * Resets the equalizer taps
      */
-    private void reset()
+    public void reset()
     {
         Arrays.fill(mTaps, 0f);
         mTaps[mCenterTap] = 1.0f;
+        mTapsTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
+        mVariance.clear();
     }
 
     /**

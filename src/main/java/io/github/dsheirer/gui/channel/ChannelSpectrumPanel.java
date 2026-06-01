@@ -63,6 +63,7 @@ import org.slf4j.LoggerFactory;
 import javax.swing.JButton;
 import javax.swing.JLabel;
 import javax.swing.JLayeredPane;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.JSpinner;
 import javax.swing.JSplitPane;
@@ -102,6 +103,9 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
     private final JFXPanel mNoiseSquelchPanel;
     private final JFXPanel mSymbolPanel;
     private JSplitPane mSplitPane;
+    private JButton mAButton;
+    private JButton mBButton;
+    private FeedbackDecoder mFeedbackDecoder;
 
     /**
      * Constructs an instance.
@@ -138,6 +142,30 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
         labelPanel.add(mDecoderCorrectionLabel);
 
         labelPanel.add(mDummyLabel);
+
+        mAButton = new JButton("EQ");
+        mAButton.setToolTipText("Display the current equalizer tap values");
+        mAButton.addActionListener(e -> {
+            String message = "Not Implemented";
+
+            if(mFeedbackDecoder != null)
+            {
+                message = mFeedbackDecoder.getEqualizerSettings();
+            }
+
+            JOptionPane.showMessageDialog(this, message);
+        });
+
+        mBButton = new JButton("Reset");
+        mBButton.setToolTipText("Resets the equalizer to default tap values");
+        mBButton.addActionListener(e -> {
+            if(mFeedbackDecoder != null)
+            {
+                mFeedbackDecoder.resetEqualizer();
+            }
+        });
+        labelPanel.add(mAButton);
+        labelPanel.add(mBButton);
 
         mNoiseFloorSpinnerModel = new SpinnerNumberModel(18, 8, 36, 1);
         mNoiseFloorSpinnerModel.addChangeListener(e -> {
@@ -369,6 +397,7 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
             mSymbolView.setProtocol("");
             mProcessingChain.removeSourceEventListener(mSourceEventProcessor);
             mProcessingChain.removeModule(mSampleStreamTapModule);
+            mFeedbackDecoder = null;
         }
 
         //Invoking reset - we're on the Swing dispatch thread here
@@ -396,6 +425,7 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
                 setRightComponent(mSymbolPanel);
                 mSymbolView.setSymbolProvider(feedbackDecoder);
                 mSymbolView.setProtocol(feedbackDecoder.getProtocolDescription());
+                mFeedbackDecoder = feedbackDecoder;
             }
 
             mProcessingChain.addModule(mSampleStreamTapModule);

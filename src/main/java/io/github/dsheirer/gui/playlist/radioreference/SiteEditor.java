@@ -434,7 +434,7 @@ public class SiteEditor extends GridPane
                 getCreateChannelConfigurationButton().setVisible(true);
                 getGoToChannelEditorCheckBox().setVisible(true);
                 getSystemTextField().setText(system.getName());
-                getSiteTextField().setText(mCurrentSite.getCountyName());
+                getSiteTextField().setText(mCurrentSite.getDescription());
                 getNameTextField().setText("Control");
 
                 if(!siteFrequencies.isEmpty())

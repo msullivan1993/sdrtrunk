@@ -101,6 +101,17 @@ public class NXDNSymbolProcessor
         DF.setPositivePrefix(" ");
     }
 
+    public void resetEqualizer()
+    {
+        mSymbolEqualizer.reset();
+    }
+
+    public String getEqualizerSettings()
+    {
+        return mSymbolEqualizer.getTapsDescription();
+    }
+
+
     public void log()
     {
         System.out.println("SAMPLES: " + mDebugSampleCounter + " SYMBOLS: " + mDebugSymbolCounter);
