@@ -32,6 +32,7 @@ public class C4FMEqualizer
     private static final DecimalFormat DF = new DecimalFormat("0.0000");
     //Maximum possible error is PI/4 = 0.78, but we clip it to less than half as the allowable error for tap updates
     private static final float MAX_SYMBOL_ERROR = 0.3f;
+    private static final float LEAKAGE = 1.0f - 1E-5f;
     private static final double TRAINING_IMPROVEMENT_GOAL_PER_ITERATION = 0.001f;
     private static final double TRAINING_CONVERGENCE_THRESHOLD = 0.16f;
     private static final double TRAINING_SKIP_THRESHOLD = 0.05;
@@ -209,7 +210,10 @@ public class C4FMEqualizer
 
                 for(index = 0; index < mTaps.length; index++)
                 {
-                    mTaps[index] += stepSize * error * mBuffer[index];
+                    if(index != mCenterTap)
+                    {
+                        mTaps[index] += stepSize * error * mBuffer[index] * LEAKAGE;
+                    }
                 }
             }
 
