@@ -271,11 +271,14 @@ public class C4FMEqualizer
                     variance.increment(error);
 
                     //Step size (mu) in range 0.0001 to 0.01
-                    float stepSize = 0.01f;
+                    float stepSize = 0.05f;
 
                     for(index = 0; index < mTaps.length; index++)
                     {
-                        mTaps[index] += error * stepSize * mBuffer[index + (2 * symbolIndex)];
+                        if(index != mCenterTap)
+                        {
+                            mTaps[index] += error * stepSize * mBuffer[index + (2 * symbolIndex)];
+                        }
                     }
                 }
 

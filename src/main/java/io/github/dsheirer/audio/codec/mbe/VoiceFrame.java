@@ -30,7 +30,7 @@ import com.fasterxml.jackson.annotation.JsonRootName;
  */
 @JsonRootName(value = "frame")
 @JsonInclude(JsonInclude.Include.NON_NULL)
-@JsonPropertyOrder({"encryption_algorithm", "encryption_key_id", "encryption_mi", "time", "hex", "tag"})
+@JsonPropertyOrder({"tag", "encryption_algorithm", "encryption_key_id", "encryption_mi", "time", "hex"})
 public class VoiceFrame
 {
     private long mTimestamp;
