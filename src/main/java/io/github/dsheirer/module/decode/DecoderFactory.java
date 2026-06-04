@@ -444,7 +444,6 @@ public class DecoderFactory
         DecodeConfigNBFM decodeConfigNBFM = (DecodeConfigNBFM)decodeConfig;
         NBFMDecoderState decoderState = new NBFMDecoderState(channel.getName(), decodeConfigNBFM);
         NBFMDecoder decoder = new NBFMDecoder(decodeConfigNBFM);
-        decoder.setDecoderState(decoderState);
         modules.add(decoder);
         modules.add(decoderState);
         List<AbstractAudioFilter> filterList = new ArrayList<>();
@@ -478,7 +477,7 @@ public class DecoderFactory
         {
             modules.add(new AMDecoder(configAM));
             modules.add(new AMDecoderState(channel.getName(), configAM));
-            List<AbstractAudioFilter> filterList = new ArrayList<>();   // no filtering for AM
+            List<AbstractAudioFilter> filterList = new ArrayList<>();   // no default filtering for AM
             modules.add(new AudioModule(aliasList, 0, 60000, filterList));
         }
         else
