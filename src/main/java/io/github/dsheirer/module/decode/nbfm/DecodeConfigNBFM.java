@@ -45,6 +45,8 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     private float mSquelchNoiseCloseThreshold = NoiseSquelch.DEFAULT_NOISE_CLOSE_THRESHOLD;
     private int mSquelchHysteresisOpenThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_OPEN_THRESHOLD;
     private int mSquelchHysteresisCloseThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_CLOSE_THRESHOLD;
+    private int mSquelchDelayTimeMs = 0;
+    private boolean mSquelchDelayRemoveSilence = true;
 
     // Channel-level squelch filtering
     private List<squelchDecoderConfig> mSquelchDecoders = new ArrayList<>();
@@ -320,5 +322,45 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     public void setDeemphasis(DeemphasisMode deemphasis)
     {
         mDeemphasis = deemphasis != null ? deemphasis : DeemphasisMode.NONE;
+    }
+
+    /**
+     * Squelch delay time in milliseconds.  When greater than zero, closing of the audio segment is deferred by this
+     * amount after squelch closes, so brief signal drops do not fragment a single transmission into multiple segments.
+     * @return squelch delay time in milliseconds, default 0 (disabled).
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "squelchDelayTimeMs")
+    public int getSquelchDelayTimeMs()
+    {
+        return mSquelchDelayTimeMs;
+    }
+
+    /**
+     * Sets the squelch delay time in milliseconds.
+     * @param delayTimeMs delay before closing the audio segment after squelch closes; 0 disables the delay.
+     */
+    public void setSquelchDelayTimeMs(int delayTimeMs)
+    {
+        mSquelchDelayTimeMs = Math.max(0, delayTimeMs);
+    }
+
+    /**
+     * Indicates whether silence during the squelch delay window is removed (true) or preserved (false).  Removing it
+     * yields a continuous clip across brief drops; preserving it retains the inter-transmission timing.
+     * @return true to remove delay-window silence, default true.
+     */
+    @JacksonXmlProperty(isAttribute = true, localName = "squelchDelayRemoveSilence")
+    public boolean isSquelchDelayRemoveSilence()
+    {
+        return mSquelchDelayRemoveSilence;
+    }
+
+    /**
+     * Sets whether silence during the squelch delay window is removed or preserved.
+     * @param removeSilence true to remove silence, false to preserve it.
+     */
+    public void setSquelchDelayRemoveSilence(boolean removeSilence)
+    {
+        mSquelchDelayRemoveSilence = removeSilence;
     }
 }

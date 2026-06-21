@@ -69,6 +69,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     private TextField mTalkgroupField;
     private ToggleSwitch mAudioFilterEnable;
     private ToggleSwitch mALCEnable;
+    private Spinner<Integer> mSquelchDelaySpinner;
+    private ToggleSwitch mRemoveSilenceSwitch;
     private TextFormatter<Integer> mTalkgroupTextFormatter;
     private ToggleSwitch mBasebandRecordSwitch;
     private SegmentedButton mBandwidthButton;
@@ -221,6 +223,18 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             mDcsCodeCombo.valueProperty().addListener((obs, ov, nv) -> modifiedProperty().set(true));
             GridPane.setConstraints(mDcsCodeCombo, 4, 2);
             gridPane.getChildren().add(mDcsCodeCombo);
+
+            // Squelch delay (audio hang time)
+            Label squelchDelayLabel = new Label("Squelch Delay (ms)");
+            GridPane.setHalignment(squelchDelayLabel, HPos.RIGHT);
+            GridPane.setConstraints(squelchDelayLabel, 0, 3);
+            gridPane.getChildren().add(squelchDelayLabel);
+
+            GridPane.setConstraints(getSquelchDelaySpinner(), 1, 3);
+            gridPane.getChildren().add(getSquelchDelaySpinner());
+
+            GridPane.setConstraints(getRemoveSilenceSwitch(), 2, 3, 2, 1);
+            gridPane.getChildren().add(getRemoveSilenceSwitch());
 
             mDecoderPane.setContent(gridPane);
 
@@ -402,6 +416,34 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
 
         return mALCEnable;
     }
+
+    private Spinner<Integer> getSquelchDelaySpinner()
+    {
+        if(mSquelchDelaySpinner == null)
+        {
+            mSquelchDelaySpinner = new Spinner<>();
+            mSquelchDelaySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 5000, 0, 100));
+            mSquelchDelaySpinner.setEditable(true);
+            mSquelchDelaySpinner.setPrefWidth(90);
+            mSquelchDelaySpinner.setTooltip(new Tooltip("Delay before closing audio after squelch closes (ms). 0 disables."));
+            mSquelchDelaySpinner.valueProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+        }
+
+        return mSquelchDelaySpinner;
+    }
+
+    private ToggleSwitch getRemoveSilenceSwitch()
+    {
+        if(mRemoveSilenceSwitch == null)
+        {
+            mRemoveSilenceSwitch = new ToggleSwitch("Remove Delay Silence");
+            mRemoveSilenceSwitch.setTooltip(new Tooltip("On: continuous clip across brief drops. Off: preserve gap timing."));
+            mRemoveSilenceSwitch.selectedProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+        }
+
+        return mRemoveSilenceSwitch;
+    }
+
     private SegmentedButton getBandwidthButton()
     {
         if(mBandwidthButton == null)
@@ -551,6 +593,11 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
 
             getDeemphasisCombo().setValue(decodeConfigNBFM.getDeemphasis());
 
+            getSquelchDelaySpinner().setDisable(false);
+            getSquelchDelaySpinner().getValueFactory().setValue(decodeConfigNBFM.getSquelchDelayTimeMs());
+            getRemoveSilenceSwitch().setDisable(false);
+            getRemoveSilenceSwitch().setSelected(decodeConfigNBFM.isSquelchDelayRemoveSilence());
+
             List<squelchDecoderConfig> savedSquelchDecoders = decodeConfigNBFM.getSquelchDecoders();
             if(savedSquelchDecoders != null && !savedSquelchDecoders.isEmpty())
             {
@@ -603,6 +650,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             getALCEnable().setSelected(false);
 
             getDeemphasisCombo().setValue(DecodeConfigNBFM.DeemphasisMode.NONE);
+            getSquelchDelaySpinner().setDisable(true);
+            getRemoveSilenceSwitch().setDisable(true);
             resetSquelchCodes();
         }
     }
@@ -642,6 +691,10 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         config.setAudioALC(getALCEnable().isSelected());
 
         config.setDeemphasis(getDeemphasisCombo().getValue());
+
+        Integer squelchDelay = getSquelchDelaySpinner().getValue();
+        config.setSquelchDelayTimeMs(squelchDelay != null ? squelchDelay : 0);
+        config.setSquelchDelayRemoveSilence(getRemoveSilenceSwitch().isSelected());
 
         List<squelchDecoderConfig> squelchDecoders = new ArrayList<>();
         squelchDecoderConfig.SquelchType selectedType = mSquelchTypeCombo.getValue();
