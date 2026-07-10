@@ -74,6 +74,7 @@ public class RecorderFactory
                         recorderModules.add(new BinaryRecorder(getRecordingBasePath(userPreferences),
                                 StringUtils.replaceIllegalCharacters(channel.toString()),
                                 channel.getDecodeConfiguration().getDecoderType().getProtocol(),
+                                channel.getDecodeConfiguration().getBitRate(),
                                 frequency));
                     }
                     break;
@@ -89,6 +90,7 @@ public class RecorderFactory
                         recorderModules.add(new BinaryRecorder(getRecordingBasePath(userPreferences),
                                 StringUtils.replaceIllegalCharacters(channel.toString()),
                                 channel.getDecodeConfiguration().getDecoderType().getProtocol(),
+                                channel.getDecodeConfiguration().getBitRate(),
                                 frequency));
                     }
                     break;

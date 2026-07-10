@@ -608,6 +608,22 @@ public class FilterFactory
     }
 
     /**
+     * Creates a Root Raised Cosine filter.
+     * @param samplesPerSymbol
+     * @param symbolCount
+     * @param alpha
+     * @return
+     */
+    public static float[] getRRC(double samplesPerSymbol, int symbolCount, float alpha)
+    {
+        //TODO:  this wraps the existing method which is reducing the samples per symbol value x2 internally and is likely
+        // a mistake.  This method is used by NXDN to correct that error until the DMR and P25 decoders can be updated to
+        // ensure that the correction doesn't impact those decoders.  Once the cleanup is complete, this method can be
+        // deleted and the NXDN implementation can revert to using the future corrected version.
+        return getRootRaisedCosine(samplesPerSymbol * 2, symbolCount, alpha);
+    }
+
+    /**
      * Creates root raised cosine filter coefficients with a tap count equal to the symbols x samplesPerSymbol + 1.
      *
      * Symbol count should be an even integer.

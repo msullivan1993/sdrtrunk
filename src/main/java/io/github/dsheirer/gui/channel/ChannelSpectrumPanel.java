@@ -103,8 +103,6 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
     private final JFXPanel mNoiseSquelchPanel;
     private final JFXPanel mSymbolPanel;
     private JSplitPane mSplitPane;
-    private JButton mAButton;
-    private JButton mBButton;
     private FeedbackDecoder mFeedbackDecoder;
 
     /**
@@ -142,30 +140,6 @@ public class ChannelSpectrumPanel extends JPanel implements Listener<ProcessingC
         labelPanel.add(mDecoderCorrectionLabel);
 
         labelPanel.add(mDummyLabel);
-
-        mAButton = new JButton("EQ");
-        mAButton.setToolTipText("Display the current equalizer tap values");
-        mAButton.addActionListener(e -> {
-            String message = "Not Implemented";
-
-            if(mFeedbackDecoder != null)
-            {
-                message = mFeedbackDecoder.getEqualizerSettings();
-            }
-
-            JOptionPane.showMessageDialog(this, message);
-        });
-
-        mBButton = new JButton("Reset");
-        mBButton.setToolTipText("Resets the equalizer to default tap values");
-        mBButton.addActionListener(e -> {
-            if(mFeedbackDecoder != null)
-            {
-                mFeedbackDecoder.resetEqualizer();
-            }
-        });
-        labelPanel.add(mAButton);
-        labelPanel.add(mBButton);
 
         mNoiseFloorSpinnerModel = new SpinnerNumberModel(18, 8, 36, 1);
         mNoiseFloorSpinnerModel.addChangeListener(e -> {

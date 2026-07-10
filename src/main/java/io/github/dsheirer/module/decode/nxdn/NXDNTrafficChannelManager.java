@@ -393,10 +393,6 @@ public class NXDNTrafficChannelManager extends TrafficChannelManager implements 
         {
             nxdn = nxdnChannel;
         }
-        else
-        {
-            System.out.println("TODO: make sure the traffic channel calls setCurrentChannel() on startup: " + (channel != null ? channel.getClass() : "channel is null"));
-        }
 
         processVoiceCall(voiceCall.getIdentifiers(), nxdn, voiceCall.getCallType(), voiceCall.getEncryptionKeyIdentifier(),
                 voiceCall.getTimestamp(), voiceCall.getCallOption(), CallTimer.UNSPECIFIED);

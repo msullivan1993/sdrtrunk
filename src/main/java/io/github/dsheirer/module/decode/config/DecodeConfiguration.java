@@ -78,4 +78,10 @@ public abstract class DecodeConfiguration extends Configuration
     {
         return new int[0];
     }
+
+    @JsonIgnore
+    public int getBitRate()
+    {
+        return getDecoderType().getProtocol().getBitRate();
+    }
 }

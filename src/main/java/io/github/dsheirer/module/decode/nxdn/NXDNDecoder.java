@@ -87,18 +87,6 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
         mSymbolProcessor = new NXDNSymbolProcessor(mMessageFramer, this);
     }
 
-    @Override
-    public void resetEqualizer()
-    {
-        mSymbolProcessor.resetEqualizer();
-    }
-
-    @Override
-    public String getEqualizerSettings()
-    {
-        return mSymbolProcessor.getEqualizerSettings();
-    }
-
     /**
      * Preloads NXDN channel details passed from the control channel used to resolve channel frequency information
      * in traffic channel broadcast messaging.
@@ -151,7 +139,7 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
 
         int symbolLength = 26;
         float rrcAlpha = 0.2f;
-        float[] rrcTaps = FilterFactory.getRootRaisedCosine(samplesPerSymbol, symbolLength, rrcAlpha);
+        float[] rrcTaps = FilterFactory.getRRC(samplesPerSymbol, symbolLength, rrcAlpha);
         mPulseShapingFilter = new RealFIRFilter(rrcTaps);
         float[] basebandTaps = getBasebandFilter(decimatedSampleRate, mConfig);
         mBasebandFilterI = FilterFactory.getRealFilter(basebandTaps);
@@ -296,7 +284,10 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
         return this;
     }
 
-    public static class MyListener implements Listener<IMessage>
+    /**
+     * Listener implementation used in the main method for offline demodulating an I/Q file..
+     */
+    public static class DebugListener implements Listener<IMessage>
     {
         private int mInvalidMessages;
         private int mValidMessages;
@@ -349,9 +340,9 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
 
         //NXDN 4800 Channels
         config = new DecodeConfigNXDN(TransmissionMode.M4800);
-        String file = directory + "20251128_052514_150845000_MobileTech-NXDN-48_Fulton_Control_47_baseband.wav";
+//        String file = directory + "20251128_052514_150845000_MobileTech-NXDN-48_Fulton_Control_47_baseband.wav";
         //Lower SNR recordings
-//        String file = directory + "20260430_023716_150867500_Mobiletech-Communications-(NXDN)_Pulaski_Pulaski_11_baseband.wav";
+        String file = directory + "20260430_023716_150867500_Mobiletech-Communications-(NXDN)_Pulaski_Pulaski_11_baseband.wav";
 //        String file = directory + "20260430_023556_152982500_Mobiletech-Communications-(NXDN)_Manlius_Manlius_15_baseband.wav";
 
         //This traffic channel sample Has Sync Detects between 1,096,430 - 1,111,430 samples (decimated sample rate: 12,500 Hz)
@@ -379,7 +370,7 @@ public class NXDNDecoder extends FeedbackDecoder implements IByteBufferProvider,
         NXDNDecoder decoder = new NXDNDecoder(config);
         decoder.start();
 
-        MyListener listener = new MyListener();
+        DebugListener listener = new DebugListener();
         decoder.setMessageListener(listener);
 
         try(ComplexWaveSource source = new ComplexWaveSource(new File(file), autoReplay))

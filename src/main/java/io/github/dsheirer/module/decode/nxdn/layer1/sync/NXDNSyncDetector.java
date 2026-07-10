@@ -33,8 +33,8 @@ public abstract class NXDNSyncDetector
     public static final long SYNC_PATTERN = 0xCDF59;
     public static final long SYNC_MASK = 0xFFFFF;
     public static final int SYNC_DIBIT_LENGTH = 10;
-    private static final Dibit[] DIBITS = toDibits(SYNC_PATTERN, SYNC_DIBIT_LENGTH);
-    protected static final float[] SYMBOLS = toSymbols(DIBITS);
+    public static final Dibit[] DIBITS = toDibits(SYNC_PATTERN, SYNC_DIBIT_LENGTH);
+    public static final float[] SYMBOLS = toSymbols(DIBITS);
     private static Map<Integer,ReferenceSyncWaveform> sReferenceWaveformMap = new TreeMap<>();
 
     /**

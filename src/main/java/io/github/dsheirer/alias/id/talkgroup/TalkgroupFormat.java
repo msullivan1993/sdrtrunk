@@ -48,7 +48,7 @@ public enum TalkgroupFormat
     NBFM("*****", 1, 0xFFFF, "1 to 65,535",
             "NBFM valid value range is 1-65,535"),
     NXDN("*****", 1, 0xFFFF, "1 to 65,535",
-            "<html>NXDN talkgroup valid range is 1 to 65,535"),
+            "NXDN talkgroup valid range is 1 to 65,535"),
     PASSPORT("*****", 1, 0xFFFF, "1 to 65,535",
         "Passport valid value range is 1-65,535"),
     UNKNOWN("********", 1, 0xFFFFFF, "1 to 16,777,215",

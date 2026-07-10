@@ -50,10 +50,11 @@ public class NXDNMessageFramer
     private final Listener<IMessage> mMessageListener;
     private final NXDNHardSyncDetector mHardSyncDetector = new NXDNHardSyncDetector();
     private final int mSymbolsPerSecond;
+    private final int mCoarseSyncLossThreshold;
     private boolean mSyncDetected = false;
     private int mDibitBufferPointer = 0;
     private int mDibitSinceTimestampCounter = 0;
-    private int mDibitsSinceLastSync = FRAME_LENGTH;
+    private int mDibitsSinceLastMessage = FRAME_LENGTH;
     private long mReferenceTimestamp = 0;
 
     /**
@@ -66,6 +67,7 @@ public class NXDNMessageFramer
         mMessageListener = messageListener;
         mLICHTracker = new LICHTracker(transmissionMode);
         mSymbolsPerSecond = transmissionMode.getSymbolRate();
+        mCoarseSyncLossThreshold = mSymbolsPerSecond + FRAME_LENGTH;
         Arrays.fill(mDibitBuffer, Dibit.D00_PLUS_1);
     }
 
@@ -127,26 +129,34 @@ public class NXDNMessageFramer
             dispatch(message);
         }
 
+        mDibitsSinceLastMessage = 0;
+
         return validMessage;
     }
 
     /**
-     * Tests if the next 10 symbols in the dibit buffer match the sync pattern.  This uses the
-     * buffer wrapping to determine if the just collected dibit sync sequence was preceded by
-     * a valid sync sequence, even though the sync detector didn't trigger on the sync pattern.
+     * Tests if the previous 10 symbols in the dibit buffer match the sync pattern.  This uses the
+     * buffer wrapping to determine if the just collected dibit sync sequence contains a sync pattern but was not
+     * triggered by the sync detector.  This should only be used at the message interval when we anticipate arrival of
+     * the succeeding message.
      *
      * @return bit errors for the received dibit sequence against the sync pattern
      */
     private int checkSync()
     {
         long value = 0;
-        int dibitBufferPointer = mDibitBufferPointer;
+        int dibitBufferPointer = mDibitBufferPointer - SYNC_LENGTH;
+
+        if(dibitBufferPointer < 0)
+        {
+            dibitBufferPointer += FRAME_LENGTH;
+        }
 
         for(int x = 0; x < SYNC_LENGTH; x++)
         {
             value <<= 2;
             value += mDibitBuffer[dibitBufferPointer++].getValue();
-            dibitBufferPointer %= PAYLOAD_LENGTH;
+            dibitBufferPointer %= FRAME_LENGTH;
         }
 
         return Long.bitCount(value ^ NXDNSyncDetector.SYNC_PATTERN);
@@ -164,58 +174,61 @@ public class NXDNMessageFramer
         }
     }
 
+    /**
+     * Notification that the sync pattern was detected.  The most recently received dibit should be the last symbol
+     * in the sync pattern and the next dibit received should be the start of the frame content.
+     */
     public void syncDetected()
     {
-        mSyncDetected = true;
+        //Ignore false/extra sync when we're already in sync detection
+        if(!mSyncDetected)
+        {
+            mSyncDetected = true;
 
-        //Update sync loss accounting when we have more/less than the expected sync pattern symbol count.
-        if(mDibitsSinceLastSync > SYNC_LENGTH)
-        {
-            dispatch(new SyncLossMessage(getTimestamp(),
-                    (mDibitsSinceLastSync - SYNC_LENGTH) * 2, Protocol.NXDN));
-            mDibitsSinceLastSync = SYNC_LENGTH;
-        }
-        else if(mDibitsSinceLastSync != SYNC_LENGTH)
-        {
-            mDibitsSinceLastSync = SYNC_LENGTH;
+            //Update sync loss accounting when we have more/less than the expected sync pattern symbol count.
+            if(mDibitsSinceLastMessage > SYNC_LENGTH)
+            {
+                dispatch(new SyncLossMessage(getTimestamp(),
+                        (mDibitsSinceLastMessage - SYNC_LENGTH) * 2, Protocol.NXDN));
+                mDibitsSinceLastMessage = SYNC_LENGTH;
+            }
+            else if(mDibitsSinceLastMessage < SYNC_LENGTH)
+            {
+                mDibitsSinceLastMessage = SYNC_LENGTH;
+            }
         }
     }
 
     /**
-     * Process hard symbol decision without sync detection.
+     * Process symbol decision without sync detection.
      * @param symbol that was demodulated.
      */
     public boolean process(Dibit symbol)
     {
-        mDibitBuffer[mDibitBufferPointer++] = symbol;
-        mDibitBufferPointer %= FRAME_LENGTH;
-        mDibitsSinceLastSync++;
-        mDibitSinceTimestampCounter++;
-
-        if(mDibitsSinceLastSync == FRAME_LENGTH)
+        //Check when we didn't get a sync detect, and count-wise, we're at the next frame's end-sync location
+        if(!mSyncDetected && mDibitsSinceLastMessage == SYNC_LENGTH)
         {
-            if(mSyncDetected)
-            {
-                mSyncDetected = false;
-                boolean valid = dispatchMessage();
-                mDibitsSinceLastSync = 0;
-                return valid;
-            }
-            else
-            {
-                int bitErrors = checkSync();
+            int bitErrors = checkSync();
 
-                if(bitErrors <= SYNC_DETECTION_BIT_ERROR_THRESHOLD)
-                {
-                    //Note: we don't reset mDibitsSinceLastSync here since we forced a sync detection so that we don't
-                    //have a continuous stream of bad messages.  We do it just once to in between valid sync detections.
-                    return dispatchMessage();
-                }
+            if(bitErrors <= SYNC_DETECTION_BIT_ERROR_THRESHOLD)
+            {
+                mSyncDetected = true;
             }
         }
-        else if(mDibitsSinceLastSync > mSymbolsPerSecond)
+
+        mDibitBuffer[mDibitBufferPointer++] = symbol;
+        mDibitBufferPointer %= FRAME_LENGTH;
+        mDibitsSinceLastMessage++;
+        mDibitSinceTimestampCounter++;
+
+        if(mSyncDetected && mDibitsSinceLastMessage == FRAME_LENGTH)
         {
-            mDibitsSinceLastSync -= mSymbolsPerSecond;
+            mSyncDetected = false;
+            return dispatchMessage();
+        }
+        else if(mDibitsSinceLastMessage >= mCoarseSyncLossThreshold)
+        {
+            mDibitsSinceLastMessage -= mSymbolsPerSecond;
             dispatch(new SyncLossMessage(getTimestamp(), mSymbolsPerSecond * 2, Protocol.NXDN));
         }
 
@@ -233,13 +246,6 @@ public class NXDNMessageFramer
         if(mHardSyncDetector.process(symbol))
         {
             syncDetected();
-        }
-        else if(mDibitsSinceLastSync == FRAME_LENGTH)
-        {
-            if(mHardSyncDetector.getCurrentBitErrors() <= SYNC_DETECTION_BIT_ERROR_THRESHOLD)
-            {
-                syncDetected();
-            }
         }
     }
 }

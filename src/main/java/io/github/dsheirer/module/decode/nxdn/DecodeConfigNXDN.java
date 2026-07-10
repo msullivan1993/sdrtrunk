@@ -56,6 +56,15 @@ public class DecodeConfigNXDN extends DecodeConfiguration
     }
 
     /**
+     * Override the parent method to indicate 4800 or 9600 bits per second, depending on the mode.
+     */
+    @Override
+    public int getBitRate()
+    {
+        return getTransmissionMode().getSymbolRate() * 2;
+    }
+
+    /**
      * Constructs an instance
      * @param transmissionMode for the system
      */

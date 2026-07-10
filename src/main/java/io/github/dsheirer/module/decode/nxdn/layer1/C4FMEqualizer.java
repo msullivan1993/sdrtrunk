@@ -25,39 +25,44 @@ import java.util.Arrays;
 import org.apache.commons.math3.stat.descriptive.moment.Variance;
 
 /**
- * Adaptive equalizer for C4FM symbols.
+ * LMS adaptive equalizer for real-valued C4FM symbols.  Trains taps on externally triggered sync detection combined
+ * with dynamic tap updates for a fixed symbol count and then freezes the taps until the error variance between sync
+ * detections exceeds a fixed threshold, whereby a tap retraining is enqueued for the next sync detection.
  */
 public class C4FMEqualizer
 {
     private static final DecimalFormat DF = new DecimalFormat("0.0000");
     //Maximum possible error is PI/4 = 0.78, but we clip it to less than half as the allowable error for tap updates
     private static final float MAX_SYMBOL_ERROR = 0.3f;
-    private static final float LEAKAGE = 1.0f - 1E-5f;
     private static final double TRAINING_IMPROVEMENT_GOAL_PER_ITERATION = 0.001f;
     private static final double TRAINING_CONVERGENCE_THRESHOLD = 0.16f;
-    private static final double TRAINING_SKIP_THRESHOLD = 0.05;
-    private static final int TRAINING_ITERATIONS_MAX = 50;
+    private static final double TRAINING_SKIP_VARIANCE_THRESHOLD = 0.05;
+    private static final int TRAINING_ITERATIONS_MAX = 30;
     private final Variance mVariance = new Variance();
     private final float[] mBuffer;
     private final float[] mReversedSyncSymbols;
+    private final float[] mTaps;
+    private final int mCenterTap;
     private final int mDelaySymbolCount;
-    private boolean mDynamicTapUpdates = false;
+    private final int mTapUpdateSymbolCount;
+    private final int mTrainingSkipCountThreshold;
     private boolean mEnabled = false;
     private boolean mSyncDetected = false;
-    private float[] mTaps;
-    private float[] mTapsTrainingSnapshot;
-    private int mCenterTap = 0;
-    private int mTrainingSymbolsRemaining = 0;
+    private int mSymbolsUntilTraining = 0;
+    private int mTapUpdateSymbolsRemaining = 0;
+    private int mSkippedTrainingCount = 0;
 
     /**
      * Constructs an instance
-     * @param syncSymbols used to train the equalizer on sync detections
-     * @param symbolLength for the equalizer, odd length.  Note: if the argument is not odd valued,
-     * the symbol count will be increased to make it odd length.
+     *
+     * @param syncSymbols sync pattern that will be used to train the equalizer on sync detections
+     * @param symbolLength for the equalizer - will be made to odd length, increasing by one if necessary (5-11)
+     * @param tapUpdateSymbolCount symbol count following sync detection and training to continue tap updates.
+     * @param maxSkipTrainingCount maximum number of consecutive sync detections and skipped trainings that can occur without retraining.
      */
-    public C4FMEqualizer(float[] syncSymbols, int symbolLength)
+    public C4FMEqualizer(float[] syncSymbols, int symbolLength, int tapUpdateSymbolCount, int maxSkipTrainingCount)
     {
-        //Store the sync pattern in reversed order
+        //Store the sync pattern in reverse order
         mReversedSyncSymbols = new float[syncSymbols.length];
         for(int x = 0; x < syncSymbols.length; x++)
         {
@@ -70,9 +75,10 @@ public class C4FMEqualizer
         mDelaySymbolCount = symbolLength / 2; //Delay until new symbol is aligned to center tap
         mTaps = new float[symbolLength * 2];
         mTaps[mCenterTap] = 1.0f;
-        mTapsTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
         int bufferLength = mReversedSyncSymbols.length * 2 + mTaps.length - 2;
         mBuffer = new float[bufferLength];
+        mTapUpdateSymbolCount = tapUpdateSymbolCount;
+        mTrainingSkipCountThreshold = maxSkipTrainingCount;
     }
 
     /**
@@ -141,7 +147,7 @@ public class C4FMEqualizer
     public void syncDetected()
     {
         mSyncDetected = true;
-        mTrainingSymbolsRemaining = mDelaySymbolCount;
+        mSymbolsUntilTraining = mDelaySymbolCount;
     }
 
     /**
@@ -160,7 +166,6 @@ public class C4FMEqualizer
     {
         Arrays.fill(mTaps, 0f);
         mTaps[mCenterTap] = 1.0f;
-        mTapsTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
         mVariance.clear();
     }
 
@@ -179,11 +184,11 @@ public class C4FMEqualizer
         mBuffer[0] = fractional;
         mBuffer[1] = symbol;
 
-        //Since there's a buffer delay, count down from sync detect until the pattern is aligned with the buffer
+        //Since there's a buffer delay, count down from sync detection until the pattern is aligned with the buffer
         // contents and we can start training
         if(mSyncDetected)
         {
-            if(--mTrainingSymbolsRemaining <= 0)
+            if(--mSymbolsUntilTraining <= 0)
             {
                 train();
             }
@@ -193,26 +198,28 @@ public class C4FMEqualizer
 
         if(mEnabled)
         {
-            int index;
+            int tapIndex;
 
-            for(index = 0; index < mTaps.length; index++)
+            for(tapIndex = 0; tapIndex < mTaps.length; tapIndex++)
             {
-                equalized += mTaps[index] * mBuffer[index];
+                equalized += mTaps[tapIndex] * mBuffer[tapIndex];
             }
 
-            if(mDynamicTapUpdates)
+            if(mTapUpdateSymbolsRemaining > 0)
             {
+                mTapUpdateSymbolsRemaining--;
                 float error = Dibit.getError(equalized);
                 error = Math.clamp(error, -MAX_SYMBOL_ERROR, MAX_SYMBOL_ERROR);
 
                 //Step size (mu) in range 0.0001 to 0.01
                 float stepSize = 0.01f;
 
-                for(index = 0; index < mTaps.length; index++)
+                for(tapIndex = 0; tapIndex < mTaps.length; tapIndex++)
                 {
-                    if(index != mCenterTap)
+                    if(tapIndex != mCenterTap)
                     {
-                        mTaps[index] += stepSize * error * mBuffer[index] * LEAKAGE;
+                        mTaps[tapIndex] += stepSize * error * mBuffer[tapIndex];
+//                        mTaps[tapIndex] += stepSize * error * mBuffer[tapIndex] * TAP_LEAKAGE;
                     }
                 }
             }
@@ -239,25 +246,38 @@ public class C4FMEqualizer
     {
         mSyncDetected = false;
 
-        //Ensure we've collected enough variance samples in the buffer and we have sufficient variance
-        if(mVariance.getN() <= mDelaySymbolCount || mVariance.getResult() > TRAINING_SKIP_THRESHOLD)
+        //Skip retrain when we're still doing dynamic tap adjustments following the previous training session.
+        if(mTapUpdateSymbolsRemaining > 0)
         {
+            mVariance.clear();
+            return;
+        }
+
+        //Ensure we've collected enough variance samples in the buffer and we have sufficient variance
+        if(mVariance.getN() <= mDelaySymbolCount || mVariance.getResult() > TRAINING_SKIP_VARIANCE_THRESHOLD ||
+                ++mSkippedTrainingCount > mTrainingSkipCountThreshold)
+        {
+            mSkippedTrainingCount = 0;
             //If the current variance tracked since the last training session using dynamic tap adjustments at each
             // symbol is excessive, fallback to the most recent training snapshot as a better starting point
             if(mVariance.getResult() > 0.225)
             {
-                mTaps = Arrays.copyOf(mTapsTrainingSnapshot, mTapsTrainingSnapshot.length);
+                reset();
             }
 
             float accumulator, error;
-            int symbolIndex, index, trainingIterationCount = 0;
             double improvement, previousVariance;
+            int symbolIndex, index, trainingIterationCount = 0;
             Variance variance = new Variance();
+
+            //Step size (mu) in range 0.0001 to 0.01
+            float stepSize = 0.005f;
 
             do
             {
                 previousVariance = variance.getN() == 0 ? 20.0 : variance.getResult();
                 variance.clear();
+
 
                 for(symbolIndex = 0; symbolIndex < mReversedSyncSymbols.length; symbolIndex++)
                 {
@@ -269,9 +289,6 @@ public class C4FMEqualizer
 
                     error = mReversedSyncSymbols[symbolIndex] - accumulator;
                     variance.increment(error);
-
-                    //Step size (mu) in range 0.0001 to 0.01
-                    float stepSize = 0.05f;
 
                     for(index = 0; index < mTaps.length; index++)
                     {
@@ -289,24 +306,13 @@ public class C4FMEqualizer
 
 //            System.out.println("Training Iterations:" + trainingIterationCount + " End Variance:" + DF.format(variance.getResult()));
 
-            //Use and snapshot the trained taps if they converge, otherwise revert to the previous training snapshot and
-            //disable dynamic tap updates until the signal becomes less noisy
-            if(variance.getResult() < TRAINING_CONVERGENCE_THRESHOLD)
+            //If we failed to converge, reset the taps to default and use blind training
+            if(variance.getResult() > TRAINING_CONVERGENCE_THRESHOLD)
             {
-                mTapsTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
-                mDynamicTapUpdates = true;
+                reset();
             }
-            else
-            {
-                mTaps = Arrays.copyOf(mTapsTrainingSnapshot, mTapsTrainingSnapshot.length);
-                mDynamicTapUpdates = false;
-            }
-        }
-        else if(mVariance.getN() >= mDelaySymbolCount && mVariance.getResult() < TRAINING_SKIP_THRESHOLD)
-        {
-            //Snapshot the current taps as the training sequence
-            mTapsTrainingSnapshot = Arrays.copyOf(mTaps, mTaps.length);
-            mDynamicTapUpdates = true;
+
+            mTapUpdateSymbolsRemaining = mTapUpdateSymbolCount;
         }
 
         mVariance.clear();
