@@ -260,54 +260,90 @@ public abstract class USBTunerController extends TunerController
         }
     }
 
-    /**
-     * Prepares the tuner for full shutdown by stopping streaming, shutdown the device, and releasing the USB resources.
+/**
+     * Prepares the tuner for full shutdown by stopping streaming, shutting down the device, and releasing USB
+     * resources.  All native teardown runs on a single worker thread in strict order so the device handle and
+     * context are never released while the USB event-processing thread is still running - releasing native
+     * resources out from under a live handleEvents() call corrupts the libusb heap and crashes the JVM.
      */
     public final void stop()
     {
         mRunning = false;
 
-        //Spin the shutdown onto a new thread so that we can set a max wait threshold.
         Thread t = new Thread(() -> {
-            stopStreaming();
+            boolean safeToClose;
+
+            try
+            {
+                //stopStreaming() stops and JOINS the event thread, then cancels and drains transfers.  It returns
+                //false only if the event thread could not be confirmed stopped - in which case we release nothing.
+                safeToClose = stopStreaming();
+            }
+            catch(Throwable throwable)
+            {
+                mLog.error("Error stopping USB tuner streaming", throwable);
+                safeToClose = false;
+            }
+
+            //Broadcaster clear is Java-side only - safe regardless of native state.
             mNativeBufferBroadcaster.clear();
-            deviceStop();
+
+            if(safeToClose)
+            {
+                try
+                {
+                    deviceStop();
+                    mTransferManager.freeTransfers();
+
+                    if(mDeviceHandle != null)
+                    {
+                        LibUsb.releaseInterface(mDeviceHandle, USB_INTERFACE);
+                        LibUsb.close(mDeviceHandle);
+                        mDeviceHandle = null;
+                        mDevice = null;
+                        mDeviceDescriptor = null;
+                    }
+
+                    if(mDeviceContext != null)
+                    {
+                        LibUsb.exit(mDeviceContext);
+                        mDeviceContext = null;
+                    }
+                }
+                catch(Throwable throwable)
+                {
+                    mLog.error("Error during USB tuner device shutdown", throwable);
+                }
+            }
+            else
+            {
+                mLog.error("USB event thread did not stop - leaving device handle/context OPEN to avoid a native " +
+                        "libusb crash. A tuner re-scan or application restart is required to fully release this device.");
+            }
         });
 
+        t.setName("sdrtrunk USB tuner shutdown - bus [" + mBus + "] port [" + mPortAddress + "]");
         t.start();
 
         try
         {
-            //Wait up to 500 milliseconds for the shutdown to complete ... otherwise interrupt it and finish shutdown
-            t.join(500);
+            //Bounded wait for responsiveness.  If it does not finish we log and return - we do NOT close the handle
+            //from this thread.  Closing while the worker/event thread may still touch the context is exactly what
+            //causes the native crash; a briefly-leaked handle is preferable to heap corruption.
+            t.join(3000);
 
             if(t.isAlive())
             {
-                mLog.info("Tuner shutdown exceeded 500ms - forcing shutdown");
-                t.interrupt();
+                mLog.warn("USB tuner shutdown did not complete within 3000ms - device may not have released cleanly");
             }
         }
         catch(InterruptedException ie)
         {
+            Thread.currentThread().interrupt();
         }
-
-        //Release transfers
-        mTransferManager.freeTransfers();
-
-        if(mDeviceHandle != null)
-        {
-            LibUsb.releaseInterface(mDeviceHandle, USB_INTERFACE);
-            LibUsb.close(mDeviceHandle);
-            mDeviceHandle = null;
-            mDevice = null;
-            mDeviceDescriptor = null;
-        }
-
-        LibUsb.exit(mDeviceContext);
-        mDeviceContext = null;
     }
 
-    /**
+/**
      * Starts streaming data from the tuner
      */
     private void startStreaming()
@@ -337,27 +373,37 @@ public abstract class USBTunerController extends TunerController
     {
     }
 
-    /**
-     * Stop streaming data from the tuner
+/**
+     * Stop streaming data from the tuner.
+     * @return true if streaming stopped cleanly (event thread confirmed stopped, transfers drained) and it is
+     * therefore safe to free transfers and release the device.  Returns false if the event thread could not be
+     * confirmed stopped, in which case native resources must NOT be released.
      */
-    private void stopStreaming()
+    private boolean stopStreaming()
     {
         if(mStreaming.compareAndSet(true, false))
         {
             //Turn off auto-resubmit of USB transfer buffers
             mTransferManager.setAutoResubmitTransfers(false);
 
-            //Stop event processing thread to put all submitted tranfers in a stable state - blocks until stopped
-            mEventProcessor.stop();
+            //Stop event processing thread to put all submitted transfers in a stable state - blocks until stopped
+            if(!mEventProcessor.stop())
+            {
+                //Event thread still alive - do NOT touch transfers or the context or we risk a native crash
+                return false;
+            }
 
             //Cancel all currently submitted transfers
             mTransferManager.cancelTransfers();
 
-            //Perform final event processing iteration so LibUsb returns all of our cancelled tranfers
+            //Perform final event processing iterations so LibUsb returns all of our cancelled transfers
             mEventProcessor.handleFinalEvents();
 
             streamingCleanup();
         }
+
+        //Either stopped cleanly, or was not streaming (event thread not running) - safe to release.
+        return true;
     }
 
     /**
@@ -791,38 +837,61 @@ public abstract class USBTunerController extends TunerController
             }
         }
 
-        /**
-         * Set the stop processing flag and block until the thread stops, blocking up to 1000 ms.
+/**
+         * Set the stop processing flag and block until the thread stops.
+         * @return true if the thread was confirmed terminated; false if it was still alive after the timeout, in
+         * which case the caller must NOT release native USB resources.
          */
-        public void stop()
+        public boolean stop()
         {
             mProcessing = false;
 
-            try
+            Thread thread = mThread;
+
+            if(thread != null)
             {
-                //Give the thread a second to stop - it should happen quickly because it's only checking transfers
-                //for completed status and returning them to us to dispatch.
-                mThread.join(1000);
-            }
-            catch(Exception e)
-            {
-                mLog.error("Error stopping LibUsb event processing thread - " + e.getLocalizedMessage());
+                try
+                {
+                    //run() calls handleEventsTimeout(...,250), so it re-checks mProcessing at least every ~250ms.
+                    //Join in a loop up to 2 seconds - this normally completes in one poll interval.
+                    long deadline = System.currentTimeMillis() + 2000;
+
+                    while(thread.isAlive() && System.currentTimeMillis() < deadline)
+                    {
+                        thread.join(250);
+                    }
+                }
+                catch(InterruptedException ie)
+                {
+                    Thread.currentThread().interrupt();
+                }
+
+                if(thread.isAlive())
+                {
+                    mLog.error("USB event processing thread did not terminate within 2000ms - device handle will " +
+                            "NOT be closed to avoid a native crash");
+                    return false;
+                }
             }
 
             mThread = null;
+            return true;
         }
 
         /**
-         * This performs a final handle-events invocation after the event processing thread has been shutdown and
-         * transfers have been flagged as cancelled.  This should cause LibUsb to return all in-progress and now
-         * canceled transfers back to us via the TransferManager.processTransfer() method.
+         * Performs final handle-events invocations after the event processing thread has been shut down and transfers
+         * have been flagged as cancelled.  This causes LibUsb to return all in-progress and now-cancelled transfers
+         * back to us via TransferManager.processTransfer().  A single iteration can leave transfers still submitted,
+         * and freeing a still-submitted transfer corrupts the libusb heap - so we iterate to fully drain them.
          */
         public void handleFinalEvents()
         {
             try
             {
-                //Use a short timeout since this is a shutdown operation
-                LibUsb.handleEventsTimeout(mDeviceContext, 50);
+                for(int x = 0; x < 10; x++)
+                {
+                    LibUsb.handleEventsTimeout(mDeviceContext, 50);
+                }
             }
             catch(Throwable throwable)
             {
