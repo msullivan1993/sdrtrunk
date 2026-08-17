@@ -269,7 +269,13 @@ public class P25P1MessageProcessor implements Listener<IMessage>
             return;
         }
 
-        processForFrequencyBands(message);
+        //Only ingest frequency band details from messages that pass FEC/CRC validation.  An invalid message can
+        //still carry a structurally-decodable IDEN_UPDATE whose band/spacing values are corrupt; storing it would
+        //poison subsequent channel frequency calculations and cause the tuner to chase phantom frequencies.
+        if(message.isValid())
+        {
+            processForFrequencyBands(message);
+        }
 
         //Also process the link control messages for frequency bands.
         if(message instanceof LDU1Message ldu1 && ldu1.getLinkControlWord() instanceof LinkControlWord lcw && lcw.isValid())
@@ -330,6 +336,10 @@ public class P25P1MessageProcessor implements Listener<IMessage>
         if(message instanceof IFrequencyBand)
         {
             IFrequencyBand bandIdentifier = (IFrequencyBand)message;
+
+            //Replace any existing band plan for this identifier so frequency calculations always track the current
+            //site/system.  Storing only the first-seen plan let a stale or one-time-bad plan stick permanently.
+            //Safe only in combination with the isValid() gate above, so only CRC-valid plans ever reach the map.
             mFrequencyBandMap.put(bandIdentifier.getIdentifier(), bandIdentifier);
         }
     }
