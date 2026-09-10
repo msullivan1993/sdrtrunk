@@ -41,9 +41,10 @@ import io.github.dsheirer.module.decode.am.AMDecoderState;
 import io.github.dsheirer.module.decode.am.DecodeConfigAM;
 import io.github.dsheirer.module.decode.config.AuxDecodeConfiguration;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSDecoder;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSDecoderState;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSMessageFilter;
+import io.github.dsheirer.module.decode.nbfm.DeemphasisMode;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSDecoder;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSDecoderState;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSMessageFilter;
 import io.github.dsheirer.module.decode.dmr.DMRDecoder;
 import io.github.dsheirer.module.decode.dmr.DMRDecoderState;
 import io.github.dsheirer.module.decode.dmr.DMRTrafficChannelManager;
@@ -311,12 +312,7 @@ public class DecoderFactory
             mLog.warn("Expected non-null traffic channel manager for channel " + channel.getName());
         }
 
-        P25P1AudioModule p25P1AudioModule = new P25P1AudioModule(userPreferences, aliasList);
-        if(channel.getDecodeConfiguration() instanceof DecodeConfigP25Phase1 p25Phase1Config)
-        {
-            p25P1AudioModule.setNacFilter(p25Phase1Config.getNacFilter());
-        }
-        modules.add(p25P1AudioModule);
+        modules.add(new P25P1AudioModule(userPreferences, aliasList));
 
         //Add a channel rotation monitor when we have multiple control channel frequencies specified
         if(channel.getSourceConfiguration() instanceof SourceConfigTunerMultipleFrequency sctmf &&
@@ -465,7 +461,7 @@ public class DecoderFactory
         {
             filterList.add(new HighPassAudioFilter());
         }
-        if(decodeConfigNBFM.getDeemphasis() != null && decodeConfigNBFM.getDeemphasis() != DecodeConfigNBFM.DeemphasisMode.NONE)
+        if(decodeConfigNBFM.getDeemphasis() != null && decodeConfigNBFM.getDeemphasis() != DeemphasisMode.NONE)
         {
             float cutoff = (float) decodeConfigNBFM.getDeemphasis().getCutoff();
             filterList.add(new DeemphasisFilter(8000, cutoff, 1.0f));
@@ -475,8 +471,7 @@ public class DecoderFactory
             filterList.add(new AudioGainFilter(1, 10, 0.90f));
         }
 
-        modules.add(new AudioModule(aliasList, 0, 60000, filterList,
-            decodeConfigNBFM.getSquelchDelayTimeMs(), decodeConfigNBFM.isSquelchDelayRemoveSilence()));
+        modules.add(new AudioModule(aliasList, 0, 60000, filterList));
     }
 
     /**

@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2023 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -17,12 +17,13 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.squelchDecoder.dcs;
+package io.github.dsheirer.module.decode.squelch.ctcss;
 
 import io.github.dsheirer.channel.state.DecoderStateEvent;
 import io.github.dsheirer.identifier.Identifier;
-import io.github.dsheirer.identifier.dcs.DCSIdentifier;
+import io.github.dsheirer.identifier.ctcss.CTCSSIdentifier;
 import io.github.dsheirer.message.Message;
+import io.github.dsheirer.module.decode.squelch.SquelchCodeState;
 import io.github.dsheirer.protocol.Protocol;
 
 import java.text.MessageFormat;
@@ -30,94 +31,99 @@ import java.util.Collections;
 import java.util.List;
 
 /**
- * Digital Coded Squelch (DCS) tone detected message
+ * CTCSS Detector message carrying CTCSS code, state and debug info for distribution
  */
-public class DCSMessage extends Message
+public class CTCSSMessage extends Message
 {
-    private DCSCode mDCSCode = null;
-    private DCSCode mConfiguredCode = null;
+    // null is a necessary default for many of these
+    private CTCSSCode mConfiguredCode = null;
+    private CTCSSCode mCTCSSCode = null;
     private String mDebugMessage = null;
-    private DCSIdentifier mIdentifier = null;
+    private CTCSSIdentifier mIdentifier = null;
     private boolean mMutedStatus = true;
-    private DecoderStateEvent.Event mCallEvent;
-    private SquelchCodeState mCodeState;
+    private boolean mFirstThreshold = false;
+    private double mPower = 0.0;
+    private double mPowerThreshold = 0.0;
+    private DecoderStateEvent.Event mCallEvent = null;
+    private SquelchCodeState mCodeState = null;
 
-    public enum SquelchCodeState
-    {
-        ACCEPTED,
-        REJECTED,
-        LOST
-    }
     /**
      * Constructs an instance
-     * @param code that was detected
-     * @param timestamp when the code was detected
      */
-    public DCSMessage(DCSCode code, long timestamp)
+    public CTCSSMessage()
     {
-        super();
-        mDCSCode = code;
+        super();            // takes care of timestamp
     }
-    public DCSMessage(DCSCode configuredCode)
+
+    /**
+     * constructor
+     * @param configuredCode Configured code for unmuting audio
+     */
+    public CTCSSMessage(CTCSSCode configuredCode)
     {
-        super();    // takes care of timestamp
+        super();            // takes care of timestamp
         mConfiguredCode = configuredCode;
     }
 
-    public DCSMessage()
+    public CTCSSMessage(CTCSSCode configuredCode, String initialMessage, DecoderStateEvent.Event decoderEvent, SquelchCodeState codeState)
     {
-        super();
+        super();            // takes care of timestamp
+        mConfiguredCode = configuredCode;
+        mDebugMessage = initialMessage;
+        mCallEvent = decoderEvent;
+        mCodeState = codeState;
     }
+
     @Override
     public String toString()
     {
-        String DCSString = mDCSCode != null ? mDCSCode.toString() : "None";
+        String toneString = mCTCSSCode != null ? mCTCSSCode.toString() : "None";
         String mutedString = mMutedStatus ? "MUTED" : "UNMUTED";
         String message = mDebugMessage != null ? mDebugMessage : "";
 
-        String s = MessageFormat.format("DCS: {0}, Config: {1}, Detected: {2}, {3}",
+        String s = MessageFormat.format("CTCSS: {0}, Config: {1}, Detected: {2}, 1st Thresh: {3}, Pwr: {4}, Pwr Thresh: {5}, {6}",
                 mutedString,
                 mConfiguredCode,
-                DCSString,
+                toneString,
+                mFirstThreshold,
+                String.format("%.1f", mPower),
+                String.format("%.1f", mPowerThreshold),
                 message
         );
         return s;
     }
 
-    /**
-     * The DCS code that was detected.
-     * @return code
-     */
-    public DCSCode getDCSCode()
-    {
-        return mDCSCode;
-    }
-
     @Override
     public boolean isValid()
     {
-        return true; //We only send a message when the tone was valid
+        return true;
     }
 
     @Override
     public Protocol getProtocol()
     {
-        return Protocol.DCS;
+        return Protocol.CTCSS;
     }
 
     @Override
     public List<Identifier> getIdentifiers()
     {
         if(mIdentifier != null)
+        {
             return Collections.singletonList(mIdentifier);
-        else
-            return Collections.emptyList();
+        }
+        return Collections.emptyList();
     }
 
-    public void setDCSCode(DCSCode code)
+    public void setCTCSSCode(CTCSSCode code)
     {
-        mDCSCode = code;
-        mIdentifier = code != null ? new DCSIdentifier(code) : null;
+        mCTCSSCode = code;
+        mIdentifier = code != null ? new CTCSSIdentifier(code) : null;
+    }
+
+    public CTCSSCode getCTCSSCode()
+    {
+        return mCTCSSCode;
     }
 
     public void setMessage(String s)
@@ -133,6 +139,21 @@ public class DCSMessage extends Message
     public boolean getMutedStatus()
     {
         return mMutedStatus;
+    }
+
+    public void setFirstThreshold(boolean b)
+    {
+        mFirstThreshold = b;
+    }
+
+    public void setPower(double power)
+    {
+        mPower = power;
+    }
+
+    public void setPowerThreshold(double powerThreshold)
+    {
+        mPowerThreshold = powerThreshold;
     }
 
     public void setCodeState(SquelchCodeState state)

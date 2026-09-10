@@ -19,19 +19,17 @@
 package io.github.dsheirer.module.decode.nbfm;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
-import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.dsp.squelch.NoiseSquelch;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.analog.DecodeConfigAnalog;
-import io.github.dsheirer.module.decode.squelchDecoder.squelchDecoderConfig;
+import io.github.dsheirer.module.decode.squelch.SquelchDecoderConfig;
 import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
 
 import java.util.ArrayList;
 import java.util.List;
 
-@JsonIgnoreProperties(ignoreUnknown = true)
 /**
  * Decoder configuration for an NBFM channel.
  *
@@ -39,56 +37,19 @@ import java.util.List;
  */
 public class DecodeConfigNBFM extends DecodeConfigAnalog
 {
-    private boolean mAudioHPFilter = true;
+    private boolean mAudioFilter = true;
     private boolean mAudioALC = false;
     private float mSquelchNoiseOpenThreshold = NoiseSquelch.DEFAULT_NOISE_OPEN_THRESHOLD;
     private float mSquelchNoiseCloseThreshold = NoiseSquelch.DEFAULT_NOISE_CLOSE_THRESHOLD;
     private int mSquelchHysteresisOpenThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_OPEN_THRESHOLD;
     private int mSquelchHysteresisCloseThreshold = NoiseSquelch.DEFAULT_HYSTERESIS_CLOSE_THRESHOLD;
-    private int mSquelchDelayTimeMs = 0;
-    private boolean mSquelchDelayRemoveSilence = true;
 
     // Channel-level squelch filtering
-    private List<squelchDecoderConfig> mSquelchDecoders = new ArrayList<>();
+    private List<SquelchDecoderConfig> mSquelchDecoders = new ArrayList<>();
 
      // FM de-emphasis
     private DeemphasisMode mDeemphasis = DeemphasisMode.NONE;
 
-    /**
-     * FM de-emphasis
-     *
-     * Per TIA-603-E, all NBFM use a -6 dB per octave roll off from 300 Hz to 3000 Hz.
-     * It also specifies an additional -12 dB above 2500 (not implemented to save on filter passes, the resampler
-     * takes care of a lot of that), and an additional -6 dB below 500 (not implemented to save on filter passes, the
-     * existing high pass filter takes care of most of that). European standard has same specifications (unlike
-     * commercial FM, which the search engines struggle with).
-     */
-    public enum DeemphasisMode
-    {
-        NONE("None", 0),
-        //OTHER_166US("166 µs (Other)", 6024),
-        NBFM_300("-6dB/octave @ 300-3KHz", 300);
-
-        private final String mLabel;
-        private final int mCutoff;
-
-        DeemphasisMode(String label, int cutoffFreq)
-        {
-            mLabel = label;
-            mCutoff = cutoffFreq;
-        }
-
-        public int getCutoff()
-        {
-            return mCutoff;
-        }
-
-        @Override
-        public String toString()
-        {
-            return mLabel;
-        }
-    }
 
     /**
      * Constructs an instance
@@ -133,21 +94,20 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
      * Indicates if the user wants the demodulated audio to be high-pass filtered.
      * @return enable status, defaults to true.
      */
-    @JacksonXmlProperty(isAttribute = true, localName = "audioHPFilter")
+    @JacksonXmlProperty(isAttribute = true, localName = "audioFilter")
     public boolean isAudioFilter()
     {
-        return mAudioHPFilter;
+        return mAudioFilter;
     }
 
     /**
      * Sets the enabled state of high-pass filtering of the demodulated audio.
-     * @param audioHPFilter to true to enable high-pass filtering.
+     * @param audioFilter to true to enable high-pass filtering.
      */
-    public void setAudioFilter(boolean audioHPFilter)
+    public void setAudioFilter(boolean audioFilter)
     {
-        mAudioHPFilter = audioHPFilter;
+        mAudioFilter = audioFilter;
     }
-
 
     /**
      * Indicates if the user wants automatic level control
@@ -265,12 +225,12 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
      */
     @JacksonXmlElementWrapper(localName = "squelchDecoders")
     @JacksonXmlProperty(localName = "squelchDecoder")
-    public List<squelchDecoderConfig> getSquelchDecoders()
+    public List<SquelchDecoderConfig> getSquelchDecoders()
     {
         return mSquelchDecoders;
     }
 
-    public void setSquelchDecoders(List<squelchDecoderConfig> squelchDecoders)
+    public void setSquelchDecoders(List<SquelchDecoderConfig> squelchDecoders)
     {
         mSquelchDecoders = squelchDecoders != null ? squelchDecoders : new ArrayList<>();
     }
@@ -278,23 +238,21 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     /**
      * Adds a squelch decoder to the channel configuration
      */
-    public void addSquelchDecoder(squelchDecoderConfig decoder)
+    public void addSquelchDecoder(SquelchDecoderConfig decoder)
     {
         if(decoder != null)
         {
             mSquelchDecoders.add(decoder);
-
         }
     }
 
     /**
      * Removes a squelch filter from the channel configuration
      */
-    public void removeSquelchDecoder(squelchDecoderConfig decoder)
+    public void removeSquelchDecoder(SquelchDecoderConfig decoder)
     {
         mSquelchDecoders.remove(decoder);
     }
-
 
     /**
      * Indicates if squelch filtering is enabled for this channel
@@ -302,9 +260,9 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     @JsonIgnore
     public boolean isSquelchDecoderEnabled()
     {
-        List<squelchDecoderConfig> decoders = getSquelchDecoders();
+        List<SquelchDecoderConfig> decoders = getSquelchDecoders();
         // TODO right now only looking at first and only decoder, need to fix when multiple decoders are possible
-        return !decoders.isEmpty() && decoders.getFirst().getSquelchType() != squelchDecoderConfig.SquelchType.NONE;
+        return !decoders.isEmpty() && decoders.getFirst().getSquelchType() != SquelchDecoderConfig.SquelchType.NONE;
     }
 
     /**
@@ -322,45 +280,5 @@ public class DecodeConfigNBFM extends DecodeConfigAnalog
     public void setDeemphasis(DeemphasisMode deemphasis)
     {
         mDeemphasis = deemphasis != null ? deemphasis : DeemphasisMode.NONE;
-    }
-
-    /**
-     * Squelch delay time in milliseconds.  When greater than zero, closing of the audio segment is deferred by this
-     * amount after squelch closes, so brief signal drops do not fragment a single transmission into multiple segments.
-     * @return squelch delay time in milliseconds, default 0 (disabled).
-     */
-    @JacksonXmlProperty(isAttribute = true, localName = "squelchDelayTimeMs")
-    public int getSquelchDelayTimeMs()
-    {
-        return mSquelchDelayTimeMs;
-    }
-
-    /**
-     * Sets the squelch delay time in milliseconds.
-     * @param delayTimeMs delay before closing the audio segment after squelch closes; 0 disables the delay.
-     */
-    public void setSquelchDelayTimeMs(int delayTimeMs)
-    {
-        mSquelchDelayTimeMs = Math.max(0, delayTimeMs);
-    }
-
-    /**
-     * Indicates whether silence during the squelch delay window is removed (true) or preserved (false).  Removing it
-     * yields a continuous clip across brief drops; preserving it retains the inter-transmission timing.
-     * @return true to remove delay-window silence, default true.
-     */
-    @JacksonXmlProperty(isAttribute = true, localName = "squelchDelayRemoveSilence")
-    public boolean isSquelchDelayRemoveSilence()
-    {
-        return mSquelchDelayRemoveSilence;
-    }
-
-    /**
-     * Sets whether silence during the squelch delay window is removed or preserved.
-     * @param removeSilence true to remove silence, false to preserve it.
-     */
-    public void setSquelchDelayRemoveSilence(boolean removeSilence)
-    {
-        mSquelchDelayRemoveSilence = removeSilence;
     }
 }

@@ -1,4 +1,4 @@
-package io.github.dsheirer.module.decode.squelchDecoder.dcs;
+package io.github.dsheirer.module.decode.squelch.dcs;
 
 /**
  * converts a 9 - bit, 3 digit octal DCS code to a 23 bit binary word that can be utilized by the DCS decoder

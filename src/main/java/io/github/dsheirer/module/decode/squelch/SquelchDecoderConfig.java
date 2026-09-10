@@ -17,12 +17,12 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.squelchDecoder;
+package io.github.dsheirer.module.decode.squelch;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
-import io.github.dsheirer.module.decode.squelchDecoder.ctcss.CTCSSCode;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSCode;
+import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSCode;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSCode;
 
 import java.util.EnumSet;
 import java.util.Set;
@@ -33,7 +33,7 @@ import java.util.Set;
  * Audio is only passed when at least one
  * configured filter matches the received signal.
  */
-public class squelchDecoderConfig
+public class SquelchDecoderConfig
 {
 
     public enum SquelchType
@@ -68,7 +68,7 @@ public class squelchDecoderConfig
     /**
      * Default constructor for Jackson XML deserialization
      */
-    public squelchDecoderConfig()
+    public SquelchDecoderConfig()
     {
     }
 
@@ -77,7 +77,7 @@ public class squelchDecoderConfig
      * @param squelchType of this filter (CTCSS, DCS)
      * @param value the tone/code value as a string
      */
-    public squelchDecoderConfig(SquelchType squelchType, String value)
+    public SquelchDecoderConfig(SquelchType squelchType, String value)
     {
         mSquelchType = squelchType;
         mValue = value;

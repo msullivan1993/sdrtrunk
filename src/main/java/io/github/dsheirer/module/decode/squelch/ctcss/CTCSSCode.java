@@ -17,7 +17,7 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.squelchDecoder.ctcss;
+package io.github.dsheirer.module.decode.squelch.ctcss;
 
 import java.util.EnumSet;
 import java.util.Set;
@@ -131,7 +131,6 @@ public enum CTCSSCode
     @Override
     public String toString()
     {
-    //    return mFrequencyLabel + " Hz";
         return getDisplayString();
     }
 

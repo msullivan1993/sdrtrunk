@@ -37,14 +37,14 @@ import io.github.dsheirer.dsp.squelch.NoiseSquelchState;
 import io.github.dsheirer.dsp.window.WindowType;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.SquelchControlDecoder;
-import io.github.dsheirer.module.decode.squelchDecoder.ctcss.CTCSSMessage;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSDecoder;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSEncode;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSMessage;
-import io.github.dsheirer.module.decode.squelchDecoder.squelchDecoderConfig;
-import io.github.dsheirer.module.decode.squelchDecoder.ctcss.CTCSSCode;
-import io.github.dsheirer.module.decode.squelchDecoder.ctcss.CTCSSDetector;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSCode;
+import io.github.dsheirer.module.decode.squelch.SquelchCodeState;
+import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSMessage;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSDecoder;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSMessage;
+import io.github.dsheirer.module.decode.squelch.SquelchDecoderConfig;
+import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSCode;
+import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSDetector;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSCode;
 import io.github.dsheirer.sample.Listener;
 import io.github.dsheirer.sample.complex.ComplexSamples;
 import io.github.dsheirer.sample.complex.IComplexSamplesListener;
@@ -136,9 +136,6 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
                 }
             }
         });
-
-        int dummy = DCSEncode.encode(DCSEncode.OctStr2Int("036"));
-
     }
 
     /**
@@ -152,8 +149,8 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
         {
             // at the present time, only a single decoder per channel is configured, however the playlist and other
             //  storage allows for multiple decoders per channel
-            List<squelchDecoderConfig> decoders = config.getSquelchDecoders();
-            for(squelchDecoderConfig decoder : decoders)
+            List<SquelchDecoderConfig> decoders = config.getSquelchDecoders();
+            for(SquelchDecoderConfig decoder : decoders)
             {
                 if(!decoder.isValid())
                 {
@@ -504,7 +501,6 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
      * Process the Resampled audio for squelch decoding.  This also where audio is muted if no tone code match.
      * @param resampled audio buffer
      */
-
     private void processResampledAudio(float [] resampled)
     {
         if(!mNoiseSquelch.isSquelched())
@@ -543,19 +539,27 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
         else
         {
             // there can still be one buffer's worth of resampled audio after .isSquelched()
-            // which may result in two consectutive paths here. While the squelch decoders will mute here,
-            // the noise squelch will mute audio in AudioModule.
+            // which may result in two consecutive paths here. While the squelch decoders will mute here,
+            // the noise squelch will mute audio downstream in AudioModule (via broadcast(resampled) below).
             if(mCTCSSDetector != null)
             {
-                CTCSSMessage ctcssMessage = mCTCSSDetector.reset();
-                getMessageListener().receive(ctcssMessage);     // sending: one of the listeners is NBFMDecoderState
+                mCTCSSDetector.reset();
+                CTCSSMessage message = new CTCSSMessage(mConfiguredCTCSSCodes.getFirst(),
+                        "Noise squelch closed.",
+                        DecoderStateEvent.Event.END,
+                        SquelchCodeState.LOST);
+                getMessageListener().receive(message);     // sending: one of the listeners is NBFMDecoderState
                 notifyCallEnd();
                 mMute = true;
             }
             if(mDCSDetector != null)
             {
-                DCSMessage dcsMessage = mDCSDetector.inlineReset();
-                getMessageListener().receive(dcsMessage);       // sending: one of the listeners is NBFMDecoderState
+                mDCSDetector.inlineReset();
+                DCSMessage message = new DCSMessage(mDCSDetector.getmConfiguredCode(),
+                        "Noise squelch closed.",
+                        DecoderStateEvent.Event.END,
+                        SquelchCodeState.LOST);
+                getMessageListener().receive(message);       // sending: one of the listeners is NBFMDecoderState
                 notifyCallEnd();
                 mMute = true;
             }

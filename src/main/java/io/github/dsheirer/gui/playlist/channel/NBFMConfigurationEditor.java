@@ -28,10 +28,11 @@ import io.github.dsheirer.gui.playlist.source.SourceConfigurationEditor;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.config.AuxDecodeConfiguration;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
-import io.github.dsheirer.module.decode.squelchDecoder.squelchDecoderConfig;
-import io.github.dsheirer.module.decode.squelchDecoder.ctcss.CTCSSCode;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSCode;
+import io.github.dsheirer.module.decode.squelch.SquelchDecoderConfig;
+import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSCode;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSCode;
 import io.github.dsheirer.module.decode.nbfm.DecodeConfigNBFM;
+import io.github.dsheirer.module.decode.nbfm.DeemphasisMode;
 import io.github.dsheirer.module.log.EventLogType;
 import io.github.dsheirer.module.log.config.EventLogConfiguration;
 import io.github.dsheirer.playlist.PlaylistManager;
@@ -69,8 +70,6 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     private TextField mTalkgroupField;
     private ToggleSwitch mAudioFilterEnable;
     private ToggleSwitch mALCEnable;
-    private Spinner<Integer> mSquelchDelaySpinner;
-    private ToggleSwitch mRemoveSilenceSwitch;
     private TextFormatter<Integer> mTalkgroupTextFormatter;
     private ToggleSwitch mBasebandRecordSwitch;
     private SegmentedButton mBandwidthButton;
@@ -82,8 +81,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     private final IntegerFormatter mDecimalFormatter = new IntegerFormatter(1, 65535);
     private final HexFormatter mHexFormatter = new HexFormatter(1, 65535);
 
-    private ComboBox<DecodeConfigNBFM.DeemphasisMode> mDeemphasisCombo;
-    private ComboBox<squelchDecoderConfig.SquelchType> mSquelchTypeCombo;
+    private ComboBox<DeemphasisMode> mDeemphasisCombo;
+    private ComboBox<SquelchDecoderConfig.SquelchType> mSquelchTypeCombo;
     private ComboBox<CTCSSCode> mCtcssCodeCombo;
     private ComboBox<DCSCode> mDcsCodeCombo;
 
@@ -165,7 +164,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             GridPane.setConstraints(getALCEnable(), 4, 1);
             gridPane.getChildren().add(getALCEnable());
 
-            /**
+            /*
              * The intention here is to have talkgroup and squelch decoder settings on a single line at the bottom
              * of the pane. In the future a button can be added to add additional talkgroups and filter lines to
              * allow for multiple decoders on a single NBFM channel. For the time being, a user can "clone" the
@@ -187,8 +186,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(typeLabel);
 
             mSquelchTypeCombo = new ComboBox<>();
-            mSquelchTypeCombo.getItems().addAll(squelchDecoderConfig.SquelchType.SQUELCH_TYPE);
-            mSquelchTypeCombo.setValue(squelchDecoderConfig.SquelchType.NONE);
+            mSquelchTypeCombo.getItems().addAll(SquelchDecoderConfig.SquelchType.SQUELCH_TYPE);
+            mSquelchTypeCombo.setValue(SquelchDecoderConfig.SquelchType.NONE);
             mSquelchTypeCombo.valueProperty().addListener((obs, ov, nv) -> {
                 updateSquelchCodeVisibility();
                 mCtcssCodeCombo.setValue(null);
@@ -224,18 +223,6 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             GridPane.setConstraints(mDcsCodeCombo, 4, 2);
             gridPane.getChildren().add(mDcsCodeCombo);
 
-            // Squelch delay (audio hang time)
-            Label squelchDelayLabel = new Label("Squelch Delay (ms)");
-            GridPane.setHalignment(squelchDelayLabel, HPos.RIGHT);
-            GridPane.setConstraints(squelchDelayLabel, 0, 3);
-            gridPane.getChildren().add(squelchDelayLabel);
-
-            GridPane.setConstraints(getSquelchDelaySpinner(), 1, 3);
-            gridPane.getChildren().add(getSquelchDelaySpinner());
-
-            GridPane.setConstraints(getRemoveSilenceSwitch(), 2, 3, 2, 1);
-            gridPane.getChildren().add(getRemoveSilenceSwitch());
-
             mDecoderPane.setContent(gridPane);
 
             //Special handling - the pill button doesn't like to set a selected state if the pane is not expanded,
@@ -252,13 +239,13 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         return mDecoderPane;
     }
 
-    private ComboBox<DecodeConfigNBFM.DeemphasisMode> getDeemphasisCombo()
+    private ComboBox<DeemphasisMode> getDeemphasisCombo()
     {
         if(mDeemphasisCombo == null)
         {
             mDeemphasisCombo = new ComboBox<>();
-            mDeemphasisCombo.getItems().addAll(DecodeConfigNBFM.DeemphasisMode.values());
-            mDeemphasisCombo.setValue(DecodeConfigNBFM.DeemphasisMode.NBFM_300);
+            mDeemphasisCombo.getItems().addAll(DeemphasisMode.values());
+            mDeemphasisCombo.setValue(DeemphasisMode.NBFM_300);
             mDeemphasisCombo.setTooltip(new Tooltip("FM de-emphasis restores flat audio from pre-emphasized FM signal"));
             mDeemphasisCombo.valueProperty().addListener((obs, ov, nv) -> modifiedProperty().set(true));
         }
@@ -269,15 +256,15 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     {
         switch(mSquelchTypeCombo.getValue())
         {
-            case squelchDecoderConfig.SquelchType.NONE:
+            case SquelchDecoderConfig.SquelchType.NONE:
                 mCtcssCodeCombo.setVisible(false);
                 mDcsCodeCombo.setVisible(false);
                 break;
-            case squelchDecoderConfig.SquelchType.CTCSS:
+            case SquelchDecoderConfig.SquelchType.CTCSS:
                 mCtcssCodeCombo.setVisible(true);
                 mDcsCodeCombo.setVisible(false);
                 break;
-            case squelchDecoderConfig.SquelchType.DCS:
+            case SquelchDecoderConfig.SquelchType.DCS:
                 mCtcssCodeCombo.setVisible(false);
                 mDcsCodeCombo.setVisible(true);
                 break;
@@ -286,7 +273,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
 
     private void resetSquelchCodes()
     {
-        mSquelchTypeCombo.setValue(squelchDecoderConfig.SquelchType.NONE);
+        mSquelchTypeCombo.setValue(SquelchDecoderConfig.SquelchType.NONE);
         mCtcssCodeCombo.setValue(null);
         mDcsCodeCombo.setValue(null);
         updateSquelchCodeVisibility();
@@ -416,34 +403,6 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
 
         return mALCEnable;
     }
-
-    private Spinner<Integer> getSquelchDelaySpinner()
-    {
-        if(mSquelchDelaySpinner == null)
-        {
-            mSquelchDelaySpinner = new Spinner<>();
-            mSquelchDelaySpinner.setValueFactory(new SpinnerValueFactory.IntegerSpinnerValueFactory(0, 5000, 0, 100));
-            mSquelchDelaySpinner.setEditable(true);
-            mSquelchDelaySpinner.setPrefWidth(90);
-            mSquelchDelaySpinner.setTooltip(new Tooltip("Delay before closing audio after squelch closes (ms). 0 disables."));
-            mSquelchDelaySpinner.valueProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
-        }
-
-        return mSquelchDelaySpinner;
-    }
-
-    private ToggleSwitch getRemoveSilenceSwitch()
-    {
-        if(mRemoveSilenceSwitch == null)
-        {
-            mRemoveSilenceSwitch = new ToggleSwitch("Remove Delay Silence");
-            mRemoveSilenceSwitch.setTooltip(new Tooltip("On: continuous clip across brief drops. Off: preserve gap timing."));
-            mRemoveSilenceSwitch.selectedProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
-        }
-
-        return mRemoveSilenceSwitch;
-    }
-
     private SegmentedButton getBandwidthButton()
     {
         if(mBandwidthButton == null)
@@ -593,25 +552,20 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
 
             getDeemphasisCombo().setValue(decodeConfigNBFM.getDeemphasis());
 
-            getSquelchDelaySpinner().setDisable(false);
-            getSquelchDelaySpinner().getValueFactory().setValue(decodeConfigNBFM.getSquelchDelayTimeMs());
-            getRemoveSilenceSwitch().setDisable(false);
-            getRemoveSilenceSwitch().setSelected(decodeConfigNBFM.isSquelchDelayRemoveSilence());
-
-            List<squelchDecoderConfig> savedSquelchDecoders = decodeConfigNBFM.getSquelchDecoders();
+            List<SquelchDecoderConfig> savedSquelchDecoders = decodeConfigNBFM.getSquelchDecoders();
             if(savedSquelchDecoders != null && !savedSquelchDecoders.isEmpty())
             {
 
                 // At present time, only one decoder per channel is used
-                squelchDecoderConfig filter = savedSquelchDecoders.get(0);
+                SquelchDecoderConfig filter = savedSquelchDecoders.get(0);
                 mSquelchTypeCombo.setValue(filter.getSquelchType());
                 updateSquelchCodeVisibility();
-                if(filter.getSquelchType() == squelchDecoderConfig.SquelchType.NONE)
+                if(filter.getSquelchType() == SquelchDecoderConfig.SquelchType.NONE)
                 {
-                    mSquelchTypeCombo.setValue(squelchDecoderConfig.SquelchType.NONE);
+                    mSquelchTypeCombo.setValue(SquelchDecoderConfig.SquelchType.NONE);
                     resetSquelchCodes();
                 }
-                if(filter.getSquelchType() == squelchDecoderConfig.SquelchType.CTCSS)
+                if(filter.getSquelchType() == SquelchDecoderConfig.SquelchType.CTCSS)
                 {
                     CTCSSCode code = filter.getCTCSSCode();
                     if(code != null && code != CTCSSCode.UNKNOWNH && code != CTCSSCode.UNKNOWNL)
@@ -619,7 +573,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
                         mCtcssCodeCombo.setValue(code);
                     }
                 }
-                if(filter.getSquelchType() == squelchDecoderConfig.SquelchType.DCS)
+                if(filter.getSquelchType() == SquelchDecoderConfig.SquelchType.DCS)
                 {
                     DCSCode code = filter.getDCSCode();
                     if(code != null)
@@ -649,9 +603,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             getALCEnable().setDisable(true);
             getALCEnable().setSelected(false);
 
-            getDeemphasisCombo().setValue(DecodeConfigNBFM.DeemphasisMode.NONE);
-            getSquelchDelaySpinner().setDisable(true);
-            getRemoveSilenceSwitch().setDisable(true);
+            getDeemphasisCombo().setValue(DeemphasisMode.NONE);
             resetSquelchCodes();
         }
     }
@@ -692,31 +644,27 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
 
         config.setDeemphasis(getDeemphasisCombo().getValue());
 
-        Integer squelchDelay = getSquelchDelaySpinner().getValue();
-        config.setSquelchDelayTimeMs(squelchDelay != null ? squelchDelay : 0);
-        config.setSquelchDelayRemoveSilence(getRemoveSilenceSwitch().isSelected());
-
-        List<squelchDecoderConfig> squelchDecoders = new ArrayList<>();
-        squelchDecoderConfig.SquelchType selectedType = mSquelchTypeCombo.getValue();
-        if(selectedType == squelchDecoderConfig.SquelchType.CTCSS)
+        List<SquelchDecoderConfig> squelchDecoders = new ArrayList<>();
+        SquelchDecoderConfig.SquelchType selectedType = mSquelchTypeCombo.getValue();
+        if(selectedType == SquelchDecoderConfig.SquelchType.CTCSS)
         {
             CTCSSCode code = mCtcssCodeCombo.getValue();
             if(code != null)
             {
-                squelchDecoders.add(new squelchDecoderConfig(selectedType, code.name()));
+                squelchDecoders.add(new SquelchDecoderConfig(selectedType, code.name()));
             }
         }
-        if(selectedType == squelchDecoderConfig.SquelchType.DCS)
+        if(selectedType == SquelchDecoderConfig.SquelchType.DCS)
         {
             DCSCode code = mDcsCodeCombo.getValue();
             if(code != null)
             {
-                squelchDecoders.add(new squelchDecoderConfig(selectedType, code.name()));
+                squelchDecoders.add(new SquelchDecoderConfig(selectedType, code.name()));
             }
         }
-        if(selectedType == squelchDecoderConfig.SquelchType.NONE)
+        if(selectedType == SquelchDecoderConfig.SquelchType.NONE)
         {
-            squelchDecoders.add((new squelchDecoderConfig(selectedType, null)));
+            squelchDecoders.add((new SquelchDecoderConfig(selectedType, null)));
         }
         config.setSquelchDecoders(squelchDecoders);
         getItem().setDecodeConfiguration(config);

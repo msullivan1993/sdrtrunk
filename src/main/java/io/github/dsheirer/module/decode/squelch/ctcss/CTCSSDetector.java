@@ -17,9 +17,10 @@
  * ****************************************************************************
  */
 
-package io.github.dsheirer.module.decode.squelchDecoder.ctcss;
+package io.github.dsheirer.module.decode.squelch.ctcss;
 
 import io.github.dsheirer.channel.state.DecoderStateEvent;
+import io.github.dsheirer.module.decode.squelch.SquelchCodeState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -64,15 +65,13 @@ public class CTCSSDetector
     private final List<CTCSSCode> mTargetCodes;      // codes we are looking to match in this channel
     private final float[] mDetectingFrequencies;
     private final CTCSSCode[] mDetectingCodeArray;  // codes we are detecting
-    private CTCSSMessage mCTCSSMessage = null;
     // Goertzel coefficients for each target frequency
     private final double[] mCoefficients;
 
     /**
      * Constructs a CTCSS detector for a specific set of target tones.
      *
-     * //@param targetCodes the set of CTCSS codes to accept as matches. If null or empty, accepts all standard codes.
-     * //@param sampleRate the sample rate of the input audio in Hz
+     * @param targetCodes the set of CTCSS codes to accept as matches. If null or empty, accepts all standard codes.
      */
     public CTCSSDetector(List<CTCSSCode> targetCodes)
     {
@@ -107,10 +106,11 @@ public class CTCSSDetector
      * the distribution that were considered to be interference rather than desired signals.
      *
      * @param samples demodulated audio samples
+     * @return CTCSSMessage for broadcasting state to listeners
      */
     public CTCSSMessage process(float[] samples)
     {
-        mCTCSSMessage = new CTCSSMessage(mTargetCodes.getFirst());
+        CTCSSMessage ctcssMessage = new CTCSSMessage(mTargetCodes.getFirst());
         double[] distribution = new double[mDetectingFrequencies.length];
         double maxPower = 0;
         int maxIndex = -1;
@@ -135,13 +135,13 @@ public class CTCSSDetector
         if(maxPower < 100 || maxIndex == 0 || maxIndex == mDetectingFrequencies.length - 1)
         {
             // skip further detection
-            mCTCSSMessage.setFirstThreshold(false);
-            mCTCSSMessage.setMessage("Signal too weak or detected CTCSS tone is outside of range of valid tones");
-            detectionLogicTree(null);
-            return mCTCSSMessage;
+            ctcssMessage.setFirstThreshold(false);
+            ctcssMessage.setMessage("Signal too weak or detected CTCSS tone is outside of range of valid tones");
+            updateDetectionState(null, ctcssMessage);
+            return ctcssMessage;
         }
 
-        mCTCSSMessage.setFirstThreshold(true);
+        ctcssMessage.setFirstThreshold(true);
         // Determine threshold based on the noise level in the distribution using standard deviation.
         //  adjacent channel interference from strong signals will cause multiple spikes in the distribution
         double sum = 0.0;
@@ -150,28 +150,28 @@ public class CTCSSDetector
             sum += num;
         }
         double mean = sum / distribution.length;
-
         double varianceSum = 0.0;
-        for (double num : distribution) {
+        for (double num : distribution)
+        {
             varianceSum += Math.pow(num - mean, 2);
         }
 
         double variance = varianceSum / (distribution.length - 1);      // sample type of std dev
         double stdDev = Math.sqrt(variance);
         double threshold = (stdDev * K_FACTOR) + mean;
-        mCTCSSMessage.setPower(maxPower);
-        mCTCSSMessage.setPowerThreshold(threshold);
+        ctcssMessage.setPower(maxPower);
+        ctcssMessage.setPowerThreshold(threshold);
         if(maxPower > threshold)
         {
             CTCSSCode detected = mDetectingCodeArray[maxIndex];
-            detectionLogicTree(detected);
+            updateDetectionState(detected, ctcssMessage);
         }
         else
         {
-            detectionLogicTree(null);   // set the code to null
+            updateDetectionState(null, ctcssMessage);   // set the code to null
         }
 
-        return mCTCSSMessage;
+        return ctcssMessage;
     }
 
     /**
@@ -200,10 +200,12 @@ public class CTCSSDetector
     }
 
     /**
-     * Handles detection logic of a CTCSS tone in the current block.
+     * Handles detection logic of a CTCSS tone in the current block and updates
+     * the CTCSSMessage states.
      * @param newCode currently detected CTCSS code, or null if no code detected
+     * @param ctcssMessage current ctcssMessage for updating
      */
-    private void detectionLogicTree(CTCSSCode newCode)
+    private void updateDetectionState(CTCSSCode newCode, CTCSSMessage ctcssMessage)
     {
         if (mMuted)
         {
@@ -213,26 +215,26 @@ public class CTCSSDetector
                 {
                     // unmute and report detected code
                     mMuted = false;
-                    mCTCSSMessage.setMutedStatus(false);
-                    mCTCSSMessage.setCTCSSCode(newCode);
-                    mCTCSSMessage.setMessage("Correct tone detected, thresholds passed, now unmuting.");
-                    mCTCSSMessage.setCallEvent(DecoderStateEvent.Event.START);
-                    mCTCSSMessage.setCodeState(CTCSSMessage.SquelchCodeState.ACCEPTED);
+                    ctcssMessage.setMutedStatus(false);
+                    ctcssMessage.setCTCSSCode(newCode);
+                    ctcssMessage.setMessage("Correct tone detected, thresholds passed, now unmuting.");
+                    ctcssMessage.setCallEvent(DecoderStateEvent.Event.START);
+                    ctcssMessage.setCodeState(SquelchCodeState.ACCEPTED);
                     mCloseCounter = 0;
                 }
                 else
                 {
                     // increment counter and wait for next audio buffer
                     mOpenCounter++;
-                    mCTCSSMessage.setCTCSSCode(newCode);
-                    mCTCSSMessage.setMessage("Waiting for consecutive correct detections.");
+                    ctcssMessage.setCTCSSCode(newCode);
+                    ctcssMessage.setMessage("Waiting for consecutive correct detections.");
                 }
             }
             else    // wrong tone or no tone, still muted
             {
                 mOpenCounter = 0;
-                mCTCSSMessage.setMutedStatus(true);
-                mCTCSSMessage.setCTCSSCode(newCode);
+                ctcssMessage.setMutedStatus(true);
+                ctcssMessage.setCTCSSCode(newCode);
                 if(newCode != null)
                 {
                     /*
@@ -244,8 +246,8 @@ public class CTCSSDetector
                     {
                         if(newCode == mPreviousRejectedCode)
                         {
-                            mCTCSSMessage.setCodeState(CTCSSMessage.SquelchCodeState.REJECTED);
-                            // this will increment past the OPEN_THRESHOLD_COUNT so the rejected state is only sent once. (== above)
+                            ctcssMessage.setCodeState(SquelchCodeState.REJECTED);
+                            // this will increment past the OPEN_THRESHOLD_COUNT so the rejected state is only sent once.
                             mRejectedQualification++;
                         }
                         else
@@ -270,7 +272,7 @@ public class CTCSSDetector
                 }
                 else
                 {
-                    mCTCSSMessage.setCodeState(CTCSSMessage.SquelchCodeState.LOST);
+                    ctcssMessage.setCodeState(SquelchCodeState.LOST);
                 }
             }
         }
@@ -280,9 +282,9 @@ public class CTCSSDetector
             {
                 // all is good, call continues
                 mCloseCounter = 0;
-                mCTCSSMessage.setMutedStatus(false);
-                mCTCSSMessage.setCTCSSCode(newCode);
-                mCTCSSMessage.setCallEvent(DecoderStateEvent.Event.CONTINUATION);
+                ctcssMessage.setMutedStatus(false);
+                ctcssMessage.setCTCSSCode(newCode);
+                ctcssMessage.setCallEvent(DecoderStateEvent.Event.CONTINUATION);
             }
             else
             {
@@ -290,18 +292,18 @@ public class CTCSSDetector
                 {
                     // Mute audio and report rejected code or lost tone
                     mMuted = true;
-                    mCTCSSMessage.setMutedStatus(true);
-                    mCTCSSMessage.setCTCSSCode(newCode);
-                    mCTCSSMessage.setMessage("Incorrect tone detected or lost, now muting.");
-                    mCTCSSMessage.setCallEvent(DecoderStateEvent.Event.END);
+                    ctcssMessage.setMutedStatus(true);
+                    ctcssMessage.setCTCSSCode(newCode);
+                    ctcssMessage.setMessage("Incorrect tone detected or lost, now muting.");
+                    ctcssMessage.setCallEvent(DecoderStateEvent.Event.END);
                     mOpenCounter = 0;
                     if(newCode != null)
                     {
-                        mCTCSSMessage.setCodeState(CTCSSMessage.SquelchCodeState.REJECTED);
+                        ctcssMessage.setCodeState(SquelchCodeState.REJECTED);
                     }
                     else
                     {
-                        mCTCSSMessage.setCodeState(CTCSSMessage.SquelchCodeState.LOST);
+                        ctcssMessage.setCodeState(SquelchCodeState.LOST);
                     }
                 }
                 else
@@ -309,10 +311,10 @@ public class CTCSSDetector
                     // all is still good with the call, but a bad tone was decoded and the closeCounter hasn't
                     //  reached a threshold yet.
                     mCloseCounter++;
-                    mCTCSSMessage.setMutedStatus(false);
-                    mCTCSSMessage.setCTCSSCode(newCode);
-                    mCTCSSMessage.setMessage("Waiting for consecutive incorrect or no tone.");
-                    mCTCSSMessage.setCallEvent(DecoderStateEvent.Event.CONTINUATION);
+                    ctcssMessage.setMutedStatus(false);
+                    ctcssMessage.setCTCSSCode(newCode);
+                    ctcssMessage.setMessage("Waiting for consecutive incorrect or no tone.");
+                    ctcssMessage.setCallEvent(DecoderStateEvent.Event.CONTINUATION);
                 }
             }
         }
@@ -321,20 +323,13 @@ public class CTCSSDetector
     /**
      * Resets the detector state. Called when the noise squelch closes
      */
-    public CTCSSMessage reset()
+    public void reset()
     {
-        CTCSSMessage message = new CTCSSMessage(mTargetCodes.getFirst());
-        message.setMessage("Noise squelch closed.");
-        message.setCTCSSCode(null);     // clears CTCSSIdentifier
-        message.setMutedStatus(true);
-        message.setCallEvent(DecoderStateEvent.Event.END);
-        message.setCodeState(CTCSSMessage.SquelchCodeState.LOST);
         mMuted = true;
         mCloseCounter = 0;
         mOpenCounter = 0;
         mPreviousRejectedCode = null;
         mRejectedQualification = 0;
-        return message;
     }
 
 }

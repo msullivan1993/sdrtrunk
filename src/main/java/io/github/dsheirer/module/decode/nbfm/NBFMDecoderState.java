@@ -27,11 +27,11 @@ import io.github.dsheirer.identifier.string.SimpleStringIdentifier;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.analog.AnalogDecoderState;
-import io.github.dsheirer.module.decode.squelchDecoder.ctcss.CTCSSMessage;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSMessage;
-import io.github.dsheirer.module.decode.squelchDecoder.squelchDecoderConfig;
-import io.github.dsheirer.module.decode.squelchDecoder.ctcss.CTCSSCode;
-import io.github.dsheirer.module.decode.squelchDecoder.dcs.DCSCode;
+import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSMessage;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSMessage;
+import io.github.dsheirer.module.decode.squelch.SquelchDecoderConfig;
+import io.github.dsheirer.module.decode.squelch.ctcss.CTCSSCode;
+import io.github.dsheirer.module.decode.squelch.dcs.DCSCode;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -49,7 +49,7 @@ public class NBFMDecoderState extends AnalogDecoderState
 
     // Tone filter configuration (from DecodeConfigNBFM)
     private boolean mSquelchDecoderEnabled = false;
-    private List<squelchDecoderConfig> mConfiguredSquelchDecoders = new ArrayList<>();
+    private List<SquelchDecoderConfig> mConfiguredSquelchDecoders = new ArrayList<>();
 
     // Current status
     private volatile String mToneStatus = "No tone detected";
@@ -157,11 +157,17 @@ public class NBFMDecoderState extends AnalogDecoderState
             int[] counts = mToneCounts.computeIfAbsent(toneLabel, k -> new int[]{0, 0});
             if(accepted)
             {
-                counts[0]++;
+                if (counts[0] < Integer.MAX_VALUE)
+                {
+                    counts[0]++;
+                }
             }
             else
             {
-                counts[1]++;
+                if(counts[1] < Integer.MAX_VALUE)
+                {
+                    counts[1]++;
+                }
             }
         }
     }
@@ -175,7 +181,7 @@ public class NBFMDecoderState extends AnalogDecoderState
         StringBuilder sb = new StringBuilder();
         sb.append("Activity Summary - Decoder:NBFM\n");
 
-         sb.append("\n\nSquelch Decoder: ");
+        sb.append("\n\nSquelch Decoder: ");
         if(mSquelchDecoderEnabled)
         {
             sb.append("ENABLED\n");
@@ -203,17 +209,16 @@ public class NBFMDecoderState extends AnalogDecoderState
                     int rejected = entry.getValue()[1];
                     if(accepted > 0)
                     {
-                        status = "ALLOWED (" + accepted + ")";
+                        status = accepted < Integer.MAX_VALUE ? "ALLOWED (" + accepted + ")" : "ALLOWED (>Max value)";
                     }
                     else
                     {
-                        status = "REJECTED (" + rejected + ")";
+                        status = rejected < Integer.MAX_VALUE ? "REJECTED (" + rejected + ")" : "REJECTED (>Max value)";
                     }
                     sb.append("\t").append(entry.getKey()).append(" - ").append(status).append("\n");
                 }
             }
         }
-
         sb.append("\n");
         return sb.toString();
     }
