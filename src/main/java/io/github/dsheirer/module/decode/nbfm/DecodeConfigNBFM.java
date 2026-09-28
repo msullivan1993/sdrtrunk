@@ -19,6 +19,7 @@
 package io.github.dsheirer.module.decode.nbfm;
 
 import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlElementWrapper;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.dsp.squelch.NoiseSquelch;
@@ -30,6 +31,7 @@ import io.github.dsheirer.source.tuner.channel.ChannelSpecification;
 import java.util.ArrayList;
 import java.util.List;
 
+@JsonIgnoreProperties(ignoreUnknown = true)
 /**
  * Decoder configuration for an NBFM channel.
  *
