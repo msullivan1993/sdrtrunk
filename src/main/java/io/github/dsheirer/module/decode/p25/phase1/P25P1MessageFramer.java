@@ -856,7 +856,7 @@ public class P25P1MessageFramer
         //observations of a valid NID value.
         mNACTracker.track(nac);
 
-        if(trackedNAC > 0 && trackedNAC != nac)
+        if(trackedNAC > 0 && trackedNAC != nac && nid.getCorrectedBitCount() > 5)
         {
             return false;
         }
