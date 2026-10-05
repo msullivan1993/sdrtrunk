@@ -55,7 +55,7 @@ public class P25P1DemodulatorC4FM
      * large balance value would rotate the outer +/- 3 symbols across the wrap boundary and the equalizer can walk
      * into a false lock.  Larger frequency errors are corrected upstream by the channel frequency error manager.
      */
-    private static final float EQUALIZER_MAXIMUM_PLL = (float)(Math.PI / 12.0);
+    private static final float EQUALIZER_MAXIMUM_PLL = (float)(Math.PI / 3.0); //+/- 800 Hz
     private static final float EQUALIZER_MAXIMUM_GAIN = 1.25f;
     private static final float EQUALIZER_RECALIBRATE_THRESHOLD = (float)(Math.PI / 8.0);
     private static final float SOFT_SYMBOL_QUADRANT_BOUNDARY = (float)(Math.PI / 2.0);
