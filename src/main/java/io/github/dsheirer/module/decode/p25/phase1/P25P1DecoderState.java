@@ -40,6 +40,7 @@ import io.github.dsheirer.identifier.patch.PatchGroupManager;
 import io.github.dsheirer.identifier.patch.PatchGroupPreLoadDataContent;
 import io.github.dsheirer.identifier.radio.RadioIdentifier;
 import io.github.dsheirer.log.LoggingSuppressor;
+import io.github.dsheirer.message.DroppedSamplesMessage;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.event.DecodeEvent;
@@ -195,6 +196,17 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private ServiceOptions mCurrentServiceOptions;
     private final Integer mNacFilter;
 
+    //Phantom TDU suppression.  On LSM simulcast the framer can decode a TDU at an LDU boundary in the middle of a
+    //continuous voice stream.  Upstream ends the call on every TDU, which fragments the call.  A TDU that arrives while
+    //voice is flowing is held; if the next protocol message is an LDU, the TDU was phantom and is discarded.  Anything
+    //else (another TDU/TDULC, HDU, TSBK, sync loss, or a hold older than PENDING_TDU_MAX_HOLD_MS) commits the call end.
+    private static final long PENDING_TDU_VOICE_WINDOW_MS = 500; //TDU within this time of the last LDU is held
+    private static final long PENDING_TDU_MAX_HOLD_MS = 1000;    //Hold older than this is committed on next message
+    private P25P1Message mPendingTDU;
+    private long mLastLDUTimestamp;
+    private long mPhantomTDUCount;
+    private P25P1QualityMonitor mQualityMonitor;
+
     /**
      * Constructs an APCO-25 decoder state with an optional traffic channel manager.
      * @param channel with configuration details
@@ -279,22 +291,28 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     @Override
     public void receive(IMessage iMessage)
     {
+        //NAC filtering - discard messages that don't match the configured NAC.  Applied first so that filtered
+        //messages are invisible to phantom TDU resolution and to the quality monitor.
+        if(mNacFilter != null && mNacFilter > 0 && iMessage instanceof P25P1Message filtered)
+        {
+            Identifier nacIdentifier = filtered.getNAC();
+
+            if(nacIdentifier instanceof APCO25Nac nac && nac.getValue() != mNacFilter.intValue())
+            {
+                return;
+            }
+        }
+
+        boolean consumed = mPendingTDU != null && resolvePendingTDU(iMessage);
+        getQualityMonitor().receive(iMessage);
+
+        if(consumed)
+        {
+            return; //Message fully handled while resolving the held TDU
+        }
+
         if(iMessage instanceof P25P1Message message)
         {
-            // NAC filtering - discard messages that don't match configured NAC
-            if(mNacFilter != null && mNacFilter > 0)
-            {
-                Identifier nacIdentifier = message.getNAC();
-                if(nacIdentifier instanceof APCO25Nac nac)
-                {
-                    if(nac.getValue() != mNacFilter.intValue())
-                    {
-                        // NAC doesn't match - discard this message
-                        return;
-                    }
-                }
-            }
-
             getIdentifierCollection().update(message.getNAC());
 
             switch(message.getDUID())
@@ -310,6 +328,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                     break;
                 case LOGICAL_LINK_DATA_UNIT_1:
                 case LOGICAL_LINK_DATA_UNIT_2:
+                    mLastLDUTimestamp = message.getTimestamp();
                     processLDU(message);
                     break;
                 case PACKET_DATA_UNIT_BLOCK_1:
@@ -319,7 +338,15 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                     processSNDCP(message);
                     break;
                 case TERMINATOR_DATA_UNIT:
-                    processTDU(message);
+                    if(mPendingTDU == null && mLastLDUTimestamp > 0 &&
+                            (message.getTimestamp() - mLastLDUTimestamp) <= PENDING_TDU_VOICE_WINDOW_MS)
+                    {
+                        mPendingTDU = message; //Hold - may be phantom
+                    }
+                    else
+                    {
+                        processTDU(message);
+                    }
                     break;
                 case TERMINATOR_DATA_UNIT_LINK_CONTROL:
                     processTDULC(message);
@@ -925,10 +952,71 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     }
 
     /**
+     * Resolves a held TDU against the next message.
+     * @param iMessage that arrived after the held TDU
+     * @return true if the message was fully handled here and should not be processed further.
+     */
+    private boolean resolvePendingTDU(IMessage iMessage)
+    {
+        long age = iMessage.getTimestamp() - mPendingTDU.getTimestamp();
+
+        if(iMessage instanceof DroppedSamplesMessage && age <= PENDING_TDU_MAX_HOLD_MS)
+        {
+            return true; //Keep holding - the phantom pattern brackets the TDU with framer realignment notices
+        }
+
+        if(iMessage instanceof P25P1Message next && age <= PENDING_TDU_MAX_HOLD_MS &&
+                (next.getDUID() == P25P1DataUnitID.LOGICAL_LINK_DATA_UNIT_1 ||
+                 next.getDUID() == P25P1DataUnitID.LOGICAL_LINK_DATA_UNIT_2))
+        {
+            mPhantomTDUCount++;
+            getQualityMonitor().phantomTDU();
+
+            if(mPhantomTDUCount <= 10 || mPhantomTDUCount % 100 == 0)
+            {
+                LOGGER.info("Suppressed phantom P25P1 TDU mid-voice on channel [" +
+                        (mChannel != null ? mChannel.getName() : "?") + "] total suppressed [" + mPhantomTDUCount + "]");
+            }
+
+            mPendingTDU = null;
+            return false; //Process the LDU normally - call continues
+        }
+
+        //Genuine end of call (or hold expired) - commit the held TDU
+        P25P1Message pending = mPendingTDU;
+        mPendingTDU = null;
+        processTDU(pending);
+
+        //Consecutive TDUs are a confirmed end of transmission - process this one immediately rather than holding it
+        if(iMessage instanceof P25P1Message nextTDU && nextTDU.getDUID() == P25P1DataUnitID.TERMINATOR_DATA_UNIT)
+        {
+            getIdentifierCollection().update(nextTDU.getNAC());
+            processTDU(nextTDU);
+            return true;
+        }
+
+        return false; //Process this message normally
+    }
+
+    /**
      * Process Terminator Data Unit (TDU).
      */
+    /**
+     * Lazy constructor for the decode-quality monitor.
+     */
+    private P25P1QualityMonitor getQualityMonitor()
+    {
+        if(mQualityMonitor == null)
+        {
+            mQualityMonitor = new P25P1QualityMonitor(mChannel);
+        }
+
+        return mQualityMonitor;
+    }
+
     private void processTDU(P25P1Message message)
     {
+        getQualityMonitor().terminator();
         mTrafficChannelManager.processP1TrafficCallEnd(getCurrentFrequency(), message.getTimestamp(), "TDU:" + message);
         broadcast(new DecoderStateEvent(this, Event.DECODE, State.ACTIVE));
     }
@@ -947,6 +1035,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
 
             if(lcw != null && lcw.isValid())
             {
+                getQualityMonitor().terminator();
                 mTrafficChannelManager.processP1TrafficCallEnd(getCurrentFrequency(), message.getTimestamp(), "TDULC:" + message);
                 broadcast(new DecoderStateEvent(this, Event.DECODE, State.ACTIVE));
                 processLC(lcw, message.getTimestamp(), true);
