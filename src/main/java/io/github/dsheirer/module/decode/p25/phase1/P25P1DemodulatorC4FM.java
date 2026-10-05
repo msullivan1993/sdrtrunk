@@ -50,7 +50,12 @@ import org.apache.commons.math3.stat.descriptive.moment.StandardDeviation;
 public class P25P1DemodulatorC4FM
 {
     private static final float EQUALIZER_LOOP_GAIN = 0.15f;
-    private static final float EQUALIZER_MAXIMUM_PLL = (float)(Math.PI / 3.0); //+/- 800 Hz
+    /**
+     * Maximum equalizer balance (PLL) correction: +/- PI/12 (+/- 200 Hz).  Soft symbols are wrapped to +/- PI, so a
+     * large balance value would rotate the outer +/- 3 symbols across the wrap boundary and the equalizer can walk
+     * into a false lock.  Larger frequency errors are corrected upstream by the channel frequency error manager.
+     */
+    private static final float EQUALIZER_MAXIMUM_PLL = (float)(Math.PI / 12.0);
     private static final float EQUALIZER_MAXIMUM_GAIN = 1.25f;
     private static final float EQUALIZER_RECALIBRATE_THRESHOLD = (float)(Math.PI / 8.0);
     private static final float SOFT_SYMBOL_QUADRANT_BOUNDARY = (float)(Math.PI / 2.0);
@@ -59,6 +64,12 @@ public class P25P1DemodulatorC4FM
     private static final float SYNC_THRESHOLD_EQUALIZED = 110;
     private static final float TWO_PI = (float)(Math.PI * 2.0);
     private static final float[] SYNC_PATTERN_SYMBOLS = P25P1SyncDetector.syncPatternToSymbols();
+    private static final float SYNC_PATTERN_ENERGY = getEnergy(SYNC_PATTERN_SYMBOLS);
+    /**
+     * Normalized sync correlation above which a detection is accepted even when the sample deviation suggests noise.
+     * Measured against noise, false detections peak around 0.85 of normalized correlation.
+     */
+    private static final float NORMALIZED_SYNC_CORRELATION_THRESHOLD = 0.9f;
     private static final int BUFFER_WORKSPACE_LENGTH = 1024;
     private static final int DIBIT_LENGTH_NID = 33; //32 dibits (64 bits) +1 status
     private static final int DIBIT_LENGTH_SYNC = 24;
@@ -100,6 +111,42 @@ public class P25P1DemodulatorC4FM
     {
         mMessageFramer = messageFramer;
         mFeedbackDecoder = feedbackDecoder;
+    }
+
+    /**
+     * Wraps a phase value into the range -PI to PI.  The sample buffer holds phases that are unwrapped from sample to
+     * sample so that interpolation between adjacent samples is continuous, but a symbol whose phase trajectory
+     * crosses +/- PI (eg multipath/simulcast distortion of the outer +/- 3 symbols) is then a full rotation away from
+     * its true value.  Wrap interpolated values before using them for symbol decisions and sync correlation.
+     */
+    static float wrap(float phase)
+    {
+        while(phase > Math.PI)
+        {
+            phase -= TWO_PI;
+        }
+
+        while(phase < -Math.PI)
+        {
+            phase += TWO_PI;
+        }
+
+        return phase;
+    }
+
+    /**
+     * Sum of the squared values.
+     */
+    private static float getEnergy(float[] values)
+    {
+        float energy = 0;
+
+        for(float value: values)
+        {
+            energy += value * value;
+        }
+
+        return energy;
     }
 
     /**
@@ -542,8 +589,13 @@ public class P25P1DemodulatorC4FM
      * Indicates if the samples in the sample buffer that contain a detected sync pattern have a standard deviation
      * that is lower than the expected sample to sample deviation for a modulated signal.  False detects against
      * noise tend to have a standard deviation that is 2x the expected value.
+     *
+     * Simulcast and multipath distortion can also raise the sample to sample deviation of a clean signal above the
+     * threshold.  A detection that exceeds the threshold is therefore only treated as noise when the sampled sync
+     * symbols also correlate weakly with the sync pattern, since false detects against noise do not produce a strong
+     * normalized correlation.
      * @param offset to the sample representing the final symbol in the detected sync pattern.
-     * @return true if the standard deviation is more than expected.
+     * @return true if the standard deviation is more than expected and the sync correlation is weak.
      */
     public boolean isNoisy(double offset)
     {
@@ -557,7 +609,41 @@ public class P25P1DemodulatorC4FM
             standardDeviation.increment(mBuffer[i] - mBuffer[i + 1]);
         }
 
-        return standardDeviation.getResult() > mNoiseStandardDeviationThreshold;
+        if(standardDeviation.getResult() <= mNoiseStandardDeviationThreshold)
+        {
+            return false;
+        }
+
+        return getNormalizedSyncCorrelation(offset) < NORMALIZED_SYNC_CORRELATION_THRESHOLD;
+    }
+
+    /**
+     * Calculates the normalized correlation (cosine similarity) of the unequalized soft symbols against the sync
+     * pattern.  A perfect match produces 1.0, independent of signal gain.
+     * @param offset to the sample representing the final symbol in the detected sync pattern.
+     * @return normalized correlation in the range -1.0 to 1.0
+     */
+    private float getNormalizedSyncCorrelation(double offset)
+    {
+        double pointer = offset - (23 * mSamplesPerSymbol);
+        float correlation = 0;
+        float energy = 0;
+
+        for(int x = 0; x < 24; x++)
+        {
+            int integral = (int)Math.floor(pointer);
+            float softSymbol = wrap(LinearInterpolator.calculate(mBuffer[integral], mBuffer[integral + 1], pointer - integral));
+            correlation += softSymbol * SYNC_PATTERN_SYMBOLS[x];
+            energy += softSymbol * softSymbol;
+            pointer += mSamplesPerSymbol;
+        }
+
+        if(energy <= 0)
+        {
+            return 0;
+        }
+
+        return (float)(correlation / Math.sqrt(energy * SYNC_PATTERN_ENERGY));
     }
 
     /**
@@ -929,9 +1015,7 @@ public class P25P1DemodulatorC4FM
          */
         public float getEqualizedSymbol(float sample1, float sample2, double mu)
         {
-            sample1 = equalize(sample1);
-            sample2 = equalize(sample2);
-            return LinearInterpolator.calculate(sample1, sample2, mu);
+            return wrap(LinearInterpolator.calculate(sample1, sample2, mu) + mPll) * mGain;
         }
 
         /**
@@ -945,28 +1029,8 @@ public class P25P1DemodulatorC4FM
          */
         public float getEqualizedSymbol(float sample1, float sample2, double mu, Correction correction)
         {
-            sample1 = (sample1 + mPll + correction.getPllAdjustment()) * (mGain + correction.getGainAdjustment());
-            sample2 = (sample2 + mPll + correction.getPllAdjustment()) * (mGain + correction.getGainAdjustment());
-
-            if(sample1 > Math.PI)
-            {
-                sample1 -= TWO_PI;
-            }
-            else if(sample1 < -Math.PI)
-            {
-                sample1 += TWO_PI;
-            }
-
-            if(sample2 > Math.PI)
-            {
-                sample2 -= TWO_PI;
-            }
-            else if(sample2 < -Math.PI)
-            {
-                sample2 += TWO_PI;
-            }
-
-            return LinearInterpolator.calculate(sample1, sample2, mu);
+            float interpolated = LinearInterpolator.calculate(sample1, sample2, mu);
+            return wrap(interpolated + mPll + correction.getPllAdjustment()) * (mGain + correction.getGainAdjustment());
         }
 
         /**
@@ -1004,7 +1068,7 @@ public class P25P1DemodulatorC4FM
                 if(bufferPointer < maxPointer)
                 {
                     softSymbol = LinearInterpolator.calculate(mBuffer[bufferPointer], mBuffer[bufferPointer + 1], fractional);
-                    softSymbol = (softSymbol + balance) * gain;
+                    softSymbol = wrap(softSymbol + balance) * gain;
                 }
                 else
                 {
@@ -1057,7 +1121,7 @@ public class P25P1DemodulatorC4FM
                 mGain += correction.getGainAdjustment();
             }
 
-            //Constrain to +/- PI/2 (+/- 1200 Hertz of offset)
+            //Constrain balance to the maximum PLL correction
             mPll = Math.min(mPll, EQUALIZER_MAXIMUM_PLL);
             mPll = Math.max(mPll, -EQUALIZER_MAXIMUM_PLL);
 
@@ -1082,10 +1146,10 @@ public class P25P1DemodulatorC4FM
             float symbol = SYNC_PATTERN_SYMBOLS[23];
             float resampledSoftSymbol = LinearInterpolator.calculate(mBuffer[resampleStartIntegral],
                     mBuffer[resampleStartIntegral + 1], resampleStart - resampleStartIntegral);
-            resampledSoftSymbol = (resampledSoftSymbol + mPll) * mGain;
+            resampledSoftSymbol = wrap(resampledSoftSymbol + mPll) * mGain;
 
             float balancePlus3Symbols = 0;
-            float balanceMinus3Symbols = resampledSoftSymbol - symbol;
+            float balanceMinus3Symbols = wrap(resampledSoftSymbol - symbol);
             float gainAccumulator = Math.abs(symbol) - Math.abs(resampledSoftSymbol);
             Dibit resampledDibit = toSymbol(resampledSoftSymbol);
             int bitErrorCount = SYNC_PATTERN_DIBITS[23].getBitErrorFrom(resampledDibit);
@@ -1100,17 +1164,17 @@ public class P25P1DemodulatorC4FM
                     symbol = SYNC_PATTERN_SYMBOLS[x];
                     resampledSoftSymbol = LinearInterpolator.calculate(mBuffer[resampleStartIntegral],
                             mBuffer[resampleStartIntegral + 1], resampleStart - resampleStartIntegral);
-                    resampledSoftSymbol = (resampledSoftSymbol + mPll) * mGain;
+                    resampledSoftSymbol = wrap(resampledSoftSymbol + mPll) * mGain;
                     resampledDibit = toSymbol(resampledSoftSymbol);
                     bitErrorCount += SYNC_PATTERN_DIBITS[x].getBitErrorFrom(resampledDibit);
 
                     if(symbol > 0)
                     {
-                        balancePlus3Symbols += (resampledSoftSymbol - symbol);
+                        balancePlus3Symbols += wrap(resampledSoftSymbol - symbol);
                     }
                     else
                     {
-                        balanceMinus3Symbols += (resampledSoftSymbol - symbol);
+                        balanceMinus3Symbols += wrap(resampledSoftSymbol - symbol);
                     }
 
                     gainAccumulator += Math.abs(symbol) - Math.abs(resampledSoftSymbol);
