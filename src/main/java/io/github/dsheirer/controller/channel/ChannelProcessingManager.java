@@ -115,6 +115,14 @@ public class ChannelProcessingManager implements Listener<ChannelEvent>
     }
 
     /**
+     * Tuner manager used to source channels.  Used by the staggered auto-start planner.
+     */
+    public TunerManager getTunerManager()
+    {
+        return mTunerManager;
+    }
+
+    /**
      * Channel metadata model containing metadata for each channel or channel time-slice that is currently processing.
      */
     public ChannelMetadataModel getChannelMetadataModel()

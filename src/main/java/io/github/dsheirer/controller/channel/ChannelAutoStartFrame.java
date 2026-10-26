@@ -20,6 +20,7 @@ package io.github.dsheirer.controller.channel;
 
 import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.sample.Listener;
+import io.github.dsheirer.source.tuner.manager.TunerManager;
 import io.github.dsheirer.util.ThreadPool;
 import java.awt.Dimension;
 import java.awt.EventQueue;
@@ -183,10 +184,14 @@ public class ChannelAutoStartFrame extends JFrame
         {
             if(mChannelEventListener != null)
             {
-                for(Channel channel : mChannels)
+                TunerManager tunerManager = null;
+
+                if(mChannelEventListener instanceof ChannelProcessingManager channelProcessingManager)
                 {
-                    mChannelEventListener.receive(new ChannelEvent(channel, ChannelEvent.Event.REQUEST_ENABLE));
+                    tunerManager = channelProcessingManager.getTunerManager();
                 }
+
+                StaggeredChannelStarter.start(mChannelEventListener, tunerManager, mChannels);
             }
         }
     }
