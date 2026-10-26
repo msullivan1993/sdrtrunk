@@ -1,0 +1,51 @@
+[1mdiff --git a/src/main/java/io/github/dsheirer/module/decode/p25/phase1/P25P1MessageFramer.java b/src/main/java/io/github/dsheirer/module/decode/p25/phase1/P25P1MessageFramer.java[m
+[1mindex 0265c324..0673c14d 100644[m
+[1m--- a/src/main/java/io/github/dsheirer/module/decode/p25/phase1/P25P1MessageFramer.java[m
+[1m+++ b/src/main/java/io/github/dsheirer/module/decode/p25/phase1/P25P1MessageFramer.java[m
+[36m@@ -59,6 +59,7 @@[m [mpublic class P25P1MessageFramer[m
+     private final P25P1SoftSyncDetector mSoftSyncDetector = P25P1SoftSyncDetectorFactory.getDetector();[m
+     private final P25P1HardSyncDetector mHardSyncDetector = new P25P1HardSyncDetector();[m
+     private boolean mSyncDetected = false;[m
+[32m+[m[32m    private float mSoftSyncScore = 0;[m
+ [m
+     private static final double MILLISECONDS_PER_SYMBOL = 1.0 / 4800.0 / 1000.0;[m
+     private Listener<IMessage> mMessageListener;[m
+[36m@@ -93,8 +94,9 @@[m [mpublic class P25P1MessageFramer[m
+     public boolean processWithSoftSyncDetect(float softSymbol, Dibit symbol)[m
+     {[m
+         boolean validNIDDetected = process(symbol);[m
+[32m+[m[32m        mSoftSyncScore = mSoftSyncDetector.process(softSymbol);[m
+ [m
+[31m-        if(mSoftSyncDetector.process(softSymbol) > SYNC_DETECTION_THRESHOLD)[m
+[32m+[m[32m        if(mSoftSyncScore > SYNC_DETECTION_THRESHOLD)[m
+         {[m
+             syncDetected();[m
+         }[m
+[36m@@ -102,6 +104,15 @@[m [mpublic class P25P1MessageFramer[m
+         return validNIDDetected;[m
+     }[m
+ [m
+[32m+[m[32m    /**[m
+[32m+[m[32m     * Sync pattern correlation score calculated for the most recent soft symbol processed via[m
+[32m+[m[32m     * processWithSoftSyncDetect().  Allows the demodulator to compare against phase-rotated sync pattern scores.[m
+[32m+[m[32m     */[m
+[32m+[m[32m    public float getSoftSyncScore()[m
+[32m+[m[32m    {[m
+[32m+[m[32m        return mSoftSyncScore;[m
+[32m+[m[32m    }[m
+[32m+[m
+     /**[m
+      * Process symbol decision and perform hard symbol sync detection.[m
+      * @param symbol decision[m
+[36m@@ -844,6 +855,11 @@[m [mpublic class P25P1MessageFramer[m
+         //flag it as invalid NID when this happens.  The NAC tracker will give us a value of 0 until it has enough[m
+         //observations of a valid NID value.[m
+         mNACTracker.track(nac);[m
+[32m+[m
+[32m+[m[32m        if(trackedNAC > 0 && trackedNAC != nac && nid.getCorrectedBitCount() > 5)[m
+[32m+[m[32m        {[m
+[32m+[m[32m            return false;[m
+[32m+[m[32m        }[m
+ //        System.out.println("\t\t" + mDebugSymbolCount + " VALID NID - NAC:" + nac + " DUID:" + duid);[m
+         nidDetected(nac, duid, nid.getCorrectedBitCount());[m
+         return true;[m

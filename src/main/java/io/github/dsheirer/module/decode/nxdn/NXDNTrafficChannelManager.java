@@ -20,6 +20,7 @@
 package io.github.dsheirer.module.decode.nxdn;
 
 import io.github.dsheirer.channel.IChannelDescriptor;
+import io.github.dsheirer.channel.state.SingleChannelState;
 import io.github.dsheirer.controller.channel.Channel;
 import io.github.dsheirer.controller.channel.ChannelEvent;
 import io.github.dsheirer.controller.channel.IChannelEventListener;
@@ -64,6 +65,7 @@ import java.util.Queue;
 import java.util.concurrent.LinkedTransferQueue;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+import org.jspecify.annotations.NonNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -91,6 +93,7 @@ public class NXDNTrafficChannelManager extends TrafficChannelManager implements 
     private ChannelAccessInformation mChannelAccessInformation;
     private boolean mIgnoreDataCalls;
     private boolean mIgnoreEncryptedCalls;
+    private List<Identifier<?>> mChannelIdentifiers;
 
     /**
      * Constructs an instance
@@ -108,6 +111,34 @@ public class NXDNTrafficChannelManager extends TrafficChannelManager implements 
             mChannelFrequencies.addAll(configNXDN.getChannelMap());
             createTrafficChannels(configNXDN);
         }
+
+        mChannelIdentifiers = SingleChannelState.createChannelIdentifiers(parentChannel);
+    }
+
+    /**
+     * Creates a new list of identifiers containing the channel metadata identifiers and the provided identifiers.
+     * @param identifiers to merge with the channel identifiers
+     * @return new list of identifiers.
+     */
+    private List<Identifier> getMergedIdentifiers(List<Identifier> identifiers)
+    {
+        List<Identifier> merged = new ArrayList<>();
+        merged.addAll(identifiers);
+        merged.addAll(mChannelIdentifiers);
+        return merged;
+    }
+
+    /**
+     * Creates a new mutable identifier collection with the identifiers and the channel identifiers
+     * @param identifiers for initial fill of the collection
+     * @return mutable identifier collection
+     */
+    private MutableIdentifierCollection getMergedIdentifierCollection(List<Identifier> identifiers)
+    {
+        List<Identifier> merged = getMergedIdentifiers(identifiers);
+        MutableIdentifierCollection mic = new MutableIdentifierCollection();
+        mic.update(merged);
+        return new MutableIdentifierCollection(merged);
     }
 
     /**
@@ -147,20 +178,30 @@ public class NXDNTrafficChannelManager extends TrafficChannelManager implements 
             {
                 for(int x = 0; x < trafficChannelPoolSize; x++)
                 {
-                    Channel trafficChannel = new Channel("T-" + mParentChannel.getName(), Channel.ChannelType.TRAFFIC);
-                    trafficChannel.setAliasListName(mParentChannel.getAliasListName());
-                    trafficChannel.setSystem(mParentChannel.getSystem());
-                    trafficChannel.setSite(mParentChannel.getSite());
-                    trafficChannel.setDecodeConfiguration(decodeConfig);
-                    trafficChannel.setEventLogConfiguration(mParentChannel.getEventLogConfiguration());
-                    trafficChannel.setRecordConfiguration(mParentChannel.getRecordConfiguration());
-                    trafficChannelList.add(trafficChannel);
+                    trafficChannelList.add(createTrafficChannel(decodeConfig));
                 }
             }
 
             mAvailableTrafficChannelQueue.addAll(trafficChannelList);
             mManagedTrafficChannels = Collections.unmodifiableList(trafficChannelList);
         }
+    }
+
+    /**
+     * Creates a child traffic channel that share's the parent decode configuration
+     * @param decodeConfig from the parent
+     * @return traffic channel.
+     */
+    private @NonNull Channel createTrafficChannel(DecodeConfigNXDN decodeConfig)
+    {
+        Channel trafficChannel = new Channel("T-" + mParentChannel.getName(), Channel.ChannelType.TRAFFIC);
+        trafficChannel.setAliasListName(mParentChannel.getAliasListName());
+        trafficChannel.setSystem(mParentChannel.getSystem());
+        trafficChannel.setSite(mParentChannel.getSite());
+        trafficChannel.setDecodeConfiguration(decodeConfig);
+        trafficChannel.setEventLogConfiguration(mParentChannel.getEventLogConfiguration());
+        trafficChannel.setRecordConfiguration(mParentChannel.getRecordConfiguration());
+        return trafficChannel;
     }
 
     /**
@@ -292,7 +333,7 @@ public class NXDNTrafficChannelManager extends TrafficChannelManager implements 
             try
             {
                 NXDNChannelEventTracker tracker = getTrackerRemoveIfStale(channel.getDownlinkFrequency(), timestamp);
-                MutableIdentifierCollection ic = new MutableIdentifierCollection(identifiers);
+                MutableIdentifierCollection ic = getMergedIdentifierCollection(identifiers);
                 if(tracker != null)
                 {
                     if(tracker.isSameCallCheckingToAndFrom(ic, timestamp))
@@ -495,7 +536,7 @@ public class NXDNTrafficChannelManager extends TrafficChannelManager implements 
         try
         {
             NXDNChannelEventTracker tracker = getTrackerRemoveIfStale(frequency, timestamp);
-            MutableIdentifierCollection ic = new MutableIdentifierCollection(identifiers);
+            MutableIdentifierCollection ic = getMergedIdentifierCollection(identifiers);
             mTalkerAliasManager.enrich(ic);
             if(tracker != null)
             {
