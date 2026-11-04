@@ -1,6 +1,6 @@
 /*
  * *****************************************************************************
- * Copyright (C) 2014-2025 Dennis Sheirer
+ * Copyright (C) 2014-2026 Dennis Sheirer
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
@@ -16,25 +16,23 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>
  * ****************************************************************************
  */
+package io.github.dsheirer.record.wave;
 
-package io.github.dsheirer.buffer.sample;
-
-import java.nio.ByteBuffer;
+import java.io.IOException;
+import java.nio.file.Path;
 
 /**
- * Interface to convert samples from a byte buffer to an array of shorts.
+ * Provides the file path for a new baseband recording file.  Invoked each time a recorder creates a new file
+ * (start, sample rate change, or file size rollover) so that time-stamped and sample-rate-bearing file names are
+ * current.
  */
-public interface ISampleConverter
+@FunctionalInterface
+public interface IRecordingPathProvider
 {
     /**
-     * Converts the byte samples contained in the byte buffer to their short-valued representation
-     * @param buffer of samples
-     * @return converted samples
+     * @param sampleRate of the recording
+     * @return path for the new recording file
+     * @throws IOException if a unique path can't be determined
      */
-    short[] convert(ByteBuffer buffer);
-
-    /**
-     * Current DC average of the samples that have been processed thus far.
-     */
-    float getAverageDc();
+    Path getPath(float sampleRate) throws IOException;
 }
