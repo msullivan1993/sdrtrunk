@@ -19,6 +19,8 @@
 
 package io.github.dsheirer.gui.playlist.channel;
 
+import io.github.dsheirer.gui.control.AccessibilityUtil;
+import io.github.dsheirer.gui.control.AccessibleToggleSwitch;
 import io.github.dsheirer.gui.playlist.eventlog.EventLogConfigurationEditor;
 import io.github.dsheirer.gui.playlist.record.RecordConfigurationEditor;
 import io.github.dsheirer.gui.playlist.source.FrequencyEditor;
@@ -132,6 +134,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
             int row = 0;
 
             Label modulationLabel = new Label("Modulation");
+            AccessibilityUtil.labelGroup(modulationLabel, getModulationSegmentedButton());
             GridPane.setHalignment(modulationLabel, HPos.RIGHT);
             GridPane.setConstraints(modulationLabel, 0, row);
             gridPane.getChildren().add(modulationLabel);
@@ -140,6 +143,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().addAll(getModulationSegmentedButton());
 
             Label poolSizeLabel = new Label("Max Traffic Channels");
+            poolSizeLabel.setLabelFor(getTrafficChannelPoolSizeSpinner());
             GridPane.setHalignment(poolSizeLabel, HPos.RIGHT);
             GridPane.setConstraints(poolSizeLabel, 2, row);
             gridPane.getChildren().add(poolSizeLabel);
@@ -151,6 +155,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
             gridPane.getChildren().add(getIgnoreDataCallsButton());
 
             Label directionLabel = new Label("Ignore Data Calls");
+            directionLabel.setLabelFor(getIgnoreDataCallsButton());
             GridPane.setHalignment(directionLabel, HPos.LEFT);
             GridPane.setConstraints(directionLabel, 5, row);
             gridPane.getChildren().add(directionLabel);
@@ -289,7 +294,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
     {
         if(mJmbeAGCButton == null)
         {
-            mJmbeAGCButton = new ToggleSwitch();
+            mJmbeAGCButton = new AccessibleToggleSwitch();
             mJmbeAGCButton.setTooltip(new Tooltip("Automatic Gain Control to automatically adjust call audio volume"));
             mJmbeAGCButton.setDisable(true);
             mJmbeAGCButton.selectedProperty().addListener((o, old, n) -> modifiedProperty().set(true));
@@ -302,7 +307,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
     {
         if(mLegacyToneLevelsButton == null)
         {
-            mLegacyToneLevelsButton = new ToggleSwitch();
+            mLegacyToneLevelsButton = new AccessibleToggleSwitch();
             mLegacyToneLevelsButton.setTooltip(new Tooltip(
                 "Restore JMBE 1.x AMBE tone levels. Requires a supporting JMBE library; " +
                 "stock libraries ignore this option. Tone Volume still adjusts the selected level."));
@@ -363,7 +368,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
     {
         if(mIgnoreDataCallsButton == null)
         {
-            mIgnoreDataCallsButton = new ToggleSwitch();
+            mIgnoreDataCallsButton = new AccessibleToggleSwitch();
             mIgnoreDataCallsButton.setDisable(true);
             mIgnoreDataCallsButton.selectedProperty()
                 .addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
