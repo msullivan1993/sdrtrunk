@@ -74,6 +74,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
     private EventLogConfigurationEditor mEventLogConfigurationEditor;
     private RecordConfigurationEditor mRecordConfigurationEditor;
     private ToggleSwitch mIgnoreDataCallsButton;
+    private ToggleSwitch mIgnoreEncryptedCallsButton;
     private Spinner<Integer> mTrafficChannelPoolSizeSpinner;
     private SegmentedButton mModulationSegmentedButton;
     private ToggleButton mC4FMToggleButton;
@@ -159,6 +160,15 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
             GridPane.setHalignment(directionLabel, HPos.LEFT);
             GridPane.setConstraints(directionLabel, 5, row);
             gridPane.getChildren().add(directionLabel);
+
+            GridPane.setConstraints(getIgnoreEncryptedCallsButton(), 6, row);
+            gridPane.getChildren().add(getIgnoreEncryptedCallsButton());
+
+            Label ignoreEncryptedLabel = new Label("Ignore Encrypted Calls");
+            ignoreEncryptedLabel.setLabelFor(getIgnoreEncryptedCallsButton());
+            GridPane.setHalignment(ignoreEncryptedLabel, HPos.LEFT);
+            GridPane.setConstraints(ignoreEncryptedLabel, 7, row);
+            gridPane.getChildren().add(ignoreEncryptedLabel);
 
             row++;
 
@@ -364,6 +374,21 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
         return mLSMToggleButton;
     }
 
+    private ToggleSwitch getIgnoreEncryptedCallsButton()
+    {
+        if(mIgnoreEncryptedCallsButton == null)
+        {
+            mIgnoreEncryptedCallsButton = new AccessibleToggleSwitch();
+            mIgnoreEncryptedCallsButton.setDisable(true);
+            mIgnoreEncryptedCallsButton.setTooltip(new Tooltip("Don't tune a traffic channel when the channel grant indicates the call is encrypted.  " +
+                    "Phase 2: the channel is still tuned when the other timeslot has a clear call."));
+            mIgnoreEncryptedCallsButton.selectedProperty()
+                .addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+        }
+
+        return mIgnoreEncryptedCallsButton;
+    }
+
     private ToggleSwitch getIgnoreDataCallsButton()
     {
         if(mIgnoreDataCallsButton == null)
@@ -449,12 +474,14 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
     protected void setDecoderConfiguration(DecodeConfiguration config)
     {
         getIgnoreDataCallsButton().setDisable(config == null);
+        getIgnoreEncryptedCallsButton().setDisable(config == null);
         getTrafficChannelPoolSizeSpinner().setDisable(config == null);
         getNacFilterEnable().setDisable(config == null);
 
         if(config instanceof DecodeConfigP25Phase1 decodeConfig)
         {
             getIgnoreDataCallsButton().setSelected(decodeConfig.getIgnoreDataCalls());
+            getIgnoreEncryptedCallsButton().setSelected(decodeConfig.getIgnoreEncryptedCalls());
             getTrafficChannelPoolSizeSpinner().getValueFactory().setValue(decodeConfig.getTrafficChannelPoolSize());
             if(decodeConfig.getModulation() == Modulation.C4FM)
             {
@@ -494,6 +521,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
         else
         {
             getIgnoreDataCallsButton().setSelected(false);
+            getIgnoreEncryptedCallsButton().setSelected(false);
             getTrafficChannelPoolSizeSpinner().getValueFactory().setValue(0);
             getNacFilterEnable().setSelected(false);
             getNacFilterField().setDisable(true);
@@ -524,6 +552,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
         }
 
         config.setIgnoreDataCalls(getIgnoreDataCallsButton().isSelected());
+        config.setIgnoreEncryptedCalls(getIgnoreEncryptedCallsButton().isSelected());
         config.setTrafficChannelPoolSize(getTrafficChannelPoolSizeSpinner().getValue());
         config.setModulation(getC4FMToggleButton().isSelected() ? Modulation.C4FM : Modulation.CQPSK);
 

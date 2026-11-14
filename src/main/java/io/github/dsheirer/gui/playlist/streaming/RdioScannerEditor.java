@@ -19,22 +19,14 @@
 
 package io.github.dsheirer.gui.playlist.streaming;
 
-import io.github.dsheirer.audio.broadcast.BroadcastFormat;
 import io.github.dsheirer.audio.broadcast.BroadcastServerType;
 import io.github.dsheirer.audio.broadcast.rdioscanner.RdioScannerConfiguration;
-import io.github.dsheirer.audio.broadcast.thinline.ThinlineRadioConfiguration;
-import io.github.dsheirer.audio.broadcast.thinline.ThinlineRadioCoreConfiguration;
 import io.github.dsheirer.gui.control.IntegerTextField;
 import io.github.dsheirer.playlist.PlaylistManager;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
-import javafx.scene.Node;
-import javafx.scene.control.Alert;
-import javafx.scene.control.Button;
-import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
-import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -50,8 +42,6 @@ public class RdioScannerEditor extends AbstractBroadcastEditor<RdioScannerConfig
     private IntegerTextField mMaxAgeTextField;
     private TextField mApiKeyTextField;
     private TextField mHostTextField;
-    private Button mSwitchToThinlineButton;
-    private Button mSwitchToCoreButton;
     private GridPane mEditorPane;
 
     /**
@@ -72,16 +62,6 @@ public class RdioScannerEditor extends AbstractBroadcastEditor<RdioScannerConfig
         getApiKeyTextField().setDisable(item == null);
         getHostTextField().setDisable(item == null);
         getMaxAgeTextField().setDisable(item == null);
-
-        if(mSwitchToThinlineButton != null)
-        {
-            mSwitchToThinlineButton.setDisable(item == null);
-        }
-
-        if(mSwitchToCoreButton != null)
-        {
-            mSwitchToCoreButton.setDisable(item == null);
-        }
 
         if(item != null)
         {
@@ -156,7 +136,7 @@ public class RdioScannerEditor extends AbstractBroadcastEditor<RdioScannerConfig
     }
 
     /**
-     * Core uses the site key from User Preferences and does not store one on the stream.
+     * Whether the API key field is shown. Core uses the site key from preferences instead.
      */
     protected boolean showsApiKey()
     {
@@ -179,14 +159,6 @@ public class RdioScannerEditor extends AbstractBroadcastEditor<RdioScannerConfig
     protected boolean hasSiteKey()
     {
         return siteKeyReady(getPlaylistManager());
-    }
-
-    /**
-     * Optional control under the URL row.
-     */
-    protected Node getTrailingNode()
-    {
-        return null;
     }
 
     protected GridPane getEditorPane()
@@ -271,26 +243,6 @@ public class RdioScannerEditor extends AbstractBroadcastEditor<RdioScannerConfig
             GridPane.setConstraints(getMaxAgeTextField(), 1, row);
             mEditorPane.getChildren().add(getMaxAgeTextField());
 
-            Node trailing = getTrailingNode();
-            if(trailing != null)
-            {
-                GridPane.setConstraints(trailing, 1, ++row);
-                mEditorPane.getChildren().add(trailing);
-            }
-
-            if(getBroadcastServerType() == BroadcastServerType.RDIOSCANNER_CALL)
-            {
-                GridPane.setConstraints(getSwitchToThinlineButton(), 1, ++row);
-                mEditorPane.getChildren().add(getSwitchToThinlineButton());
-            }
-
-            if(getBroadcastServerType() == BroadcastServerType.RDIOSCANNER_CALL ||
-                getBroadcastServerType() == BroadcastServerType.THINLINE_RADIO)
-            {
-                GridPane.setConstraints(getSwitchToCoreButton(), 1, ++row);
-                mEditorPane.getChildren().add(getSwitchToCoreButton());
-            }
-
         }
 
         return mEditorPane;
@@ -330,214 +282,6 @@ public class RdioScannerEditor extends AbstractBroadcastEditor<RdioScannerConfig
         }
 
         return mApiKeyTextField;
-    }
-
-    private Button getSwitchToThinlineButton()
-    {
-        if(mSwitchToThinlineButton == null)
-        {
-            mSwitchToThinlineButton = new Button("Switch to Thinline Radio");
-            mSwitchToThinlineButton.setDisable(true);
-            mSwitchToThinlineButton.setTooltip(new Tooltip("Upload calls from this stream to Thinline Radio instead of Rdio Scanner"));
-            mSwitchToThinlineButton.setOnAction(event -> switchTo(BroadcastServerType.THINLINE_RADIO, mSwitchToThinlineButton));
-        }
-
-        return mSwitchToThinlineButton;
-    }
-
-    private Button getSwitchToCoreButton()
-    {
-        if(mSwitchToCoreButton == null)
-        {
-            mSwitchToCoreButton = new Button("Switch to Thinline Radio Core");
-            mSwitchToCoreButton.setDisable(getItem() == null);
-            mSwitchToCoreButton.setTooltip(new Tooltip("Hold each call on this site until ThinLine chooses which recording to upload"));
-            mSwitchToCoreButton.setOnAction(event -> switchTo(BroadcastServerType.THINLINE_RADIO_CORE, mSwitchToCoreButton));
-        }
-
-        return mSwitchToCoreButton;
-    }
-
-    /**
-     * Replaces this stream with another Thinline stream type and keeps the name, system, and URL.
-     */
-    protected void switchTo(BroadcastServerType target, Node owner)
-    {
-        RdioScannerConfiguration current = getItem();
-
-        if(current == null || current.getBroadcastServerType() == target || owner == null || owner.getScene() == null)
-        {
-            return;
-        }
-
-        boolean core = target == BroadcastServerType.THINLINE_RADIO_CORE;
-        if(core && !hasSiteKey())
-        {
-            Alert missing = new Alert(Alert.AlertType.INFORMATION,
-                "Open User Preferences, choose Thinline Radio, and enter the site key. Thinline Radio Core uses that key.",
-                ButtonType.OK);
-            missing.setTitle("Site key required");
-            missing.setHeaderText("Add the site key before using Thinline Radio Core");
-            missing.initOwner(owner.getScene().getWindow());
-            missing.showAndWait();
-            return;
-        }
-        String message = core
-            ? "The name, system ID, and URL stay with this stream. It uses the site key from User Preferences. Calls stay on this computer until ThinLine asks for one of them."
-            : "The name, system ID, and URL stay with this stream. Put an upload API key in the key field, then save the playlist. Calls upload as soon as they finish.";
-
-        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, message, ButtonType.NO, ButtonType.YES);
-        alert.setTitle(core ? "Switch to Thinline Radio Core" : "Switch to Thinline Radio");
-        alert.setHeaderText(core ? "Hold calls until ThinLine chooses one?" : "Upload each call immediately?");
-        alert.initOwner(owner.getScene().getWindow());
-        alert.setResizable(true);
-        alert.onShownProperty().addListener(e -> javafx.application.Platform.runLater(() -> alert.setResizable(false)));
-
-        alert.showAndWait().ifPresent(buttonType -> {
-            if(buttonType != ButtonType.YES)
-            {
-                return;
-            }
-
-            RdioScannerConfiguration replacement = core ? toCoreConfiguration(current) : toThinlineConfiguration(current);
-            String previousName = current.getName();
-            String updatedName = replacement.getName();
-
-            if(previousName != null && !previousName.isEmpty() && updatedName != null &&
-                !updatedName.contentEquals(previousName) &&
-                getPlaylistManager().getAliasModel().hasAliasesWithBroadcastChannel(previousName))
-            {
-                Alert aliasAlert = new Alert(Alert.AlertType.CONFIRMATION);
-                aliasAlert.getButtonTypes().clear();
-                aliasAlert.getButtonTypes().addAll(ButtonType.NO, ButtonType.YES);
-                aliasAlert.setTitle("Update Aliases");
-                aliasAlert.setHeaderText("Rename requires updating aliases for this stream");
-                aliasAlert.setContentText("Do you want to update aliases to new stream name?");
-                aliasAlert.initOwner(owner.getScene().getWindow());
-                aliasAlert.setResizable(true);
-                aliasAlert.onShownProperty().addListener(e ->
-                    javafx.application.Platform.runLater(() -> aliasAlert.setResizable(false)));
-                aliasAlert.showAndWait().ifPresent(aliasButton -> {
-                    if(aliasButton == ButtonType.YES)
-                    {
-                        getPlaylistManager().getAliasModel().updateBroadcastChannel(previousName, updatedName);
-                    }
-                });
-            }
-
-            modifiedProperty().set(false);
-
-            StreamingEditor streamingEditor = getStreamingEditor(owner);
-
-            if(streamingEditor != null)
-            {
-                streamingEditor.replaceBroadcastConfiguration(current, replacement);
-            }
-            else
-            {
-                getPlaylistManager().getBroadcastModel().removeBroadcastConfiguration(current);
-                getPlaylistManager().getBroadcastModel().addBroadcastConfiguration(replacement);
-            }
-        });
-    }
-
-    private ThinlineRadioConfiguration toThinlineConfiguration(RdioScannerConfiguration current)
-    {
-        BroadcastFormat format = current.getBroadcastFormat() != null ? current.getBroadcastFormat() : BroadcastFormat.MP3;
-        ThinlineRadioConfiguration thinline = new ThinlineRadioConfiguration(format);
-        thinline.setName(getNameTextField().getText());
-        thinline.setEnabled(getEnabledSwitch().isSelected());
-        thinline.setPassword(current.getPassword());
-        thinline.setPort(current.getPort());
-        thinline.setDelay(current.getDelay());
-
-        int systemID = getSystemIdTextField().get() != null ? getSystemIdTextField().get() : 0;
-        thinline.setSystemID(systemID);
-        thinline.setApiKey(getApiKeyTextField().getText());
-
-        String host = getHostTextField().getText();
-
-        if(host != null)
-        {
-            host = host.replace(API_PATH, "");
-            host += API_PATH;
-            thinline.setHost(host);
-        }
-        else
-        {
-            thinline.setHost(current.getHost());
-        }
-
-        Integer maxAgeSeconds = getMaxAgeTextField().get();
-
-        if(maxAgeSeconds != null)
-        {
-            thinline.setMaximumRecordingAge(maxAgeSeconds * 1000L);
-        }
-        else
-        {
-            thinline.setMaximumRecordingAge(current.getMaximumRecordingAge());
-        }
-
-        return thinline;
-    }
-
-    private ThinlineRadioCoreConfiguration toCoreConfiguration(RdioScannerConfiguration current)
-    {
-        BroadcastFormat format = current.getBroadcastFormat() != null ? current.getBroadcastFormat() : BroadcastFormat.MP3;
-        ThinlineRadioCoreConfiguration core = new ThinlineRadioCoreConfiguration(format);
-        core.setName(getNameTextField().getText());
-        core.setEnabled(getEnabledSwitch().isSelected());
-        core.setPassword(current.getPassword());
-        core.setPort(current.getPort());
-        core.setDelay(current.getDelay());
-
-        int systemID = getSystemIdTextField().get() != null ? getSystemIdTextField().get() : 0;
-        core.setSystemID(systemID);
-        core.setApiKey("");
-
-        String host = getHostTextField().getText();
-
-        if(host != null)
-        {
-            host = host.replace(API_PATH, "");
-            host += API_PATH;
-            core.setHost(host);
-        }
-        else
-        {
-            core.setHost(current.getHost());
-        }
-
-        Integer maxAgeSeconds = getMaxAgeTextField().get();
-
-        if(maxAgeSeconds != null)
-        {
-            core.setMaximumRecordingAge(maxAgeSeconds * 1000L);
-        }
-        else
-        {
-            core.setMaximumRecordingAge(current.getMaximumRecordingAge());
-        }
-
-        return core;
-    }
-
-    private StreamingEditor getStreamingEditor(Node start)
-    {
-        Node node = start;
-
-        while(node != null)
-        {
-            if(node instanceof StreamingEditor streamingEditor)
-            {
-                return streamingEditor;
-            }
-
-            node = node.getParent();
-        }
-
-        return null;
     }
 
     private IntegerTextField getSystemIdTextField()
