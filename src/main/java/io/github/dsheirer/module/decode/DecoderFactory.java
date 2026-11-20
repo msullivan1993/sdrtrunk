@@ -514,8 +514,7 @@ public class DecoderFactory
             filterList.add(new AudioGainFilter(1, 10, 0.90f));
         }
 
-        modules.add(new AudioModule(aliasList, 0, 60000, filterList,
-            decodeConfigNBFM.getSquelchDelayTimeMs(), decodeConfigNBFM.isSquelchDelayRemoveSilence()));
+        modules.add(new AudioModule(aliasList, 0, 60000, filterList));
     }
 
     /**

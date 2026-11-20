@@ -33,10 +33,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.List;
-import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
-import java.util.concurrent.ScheduledFuture;
-import java.util.concurrent.TimeUnit;
 
 /**
  * Provides packaging of demodulated audio sample buffers into audio segments for broadcast to registered listeners.
@@ -48,14 +44,9 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
     Listener<float[]>
 {
     private static final Logger mLog = LoggerFactory.getLogger(AudioModule.class);
-    private static final int AUDIO_SAMPLE_RATE = 8000;
     private List<AbstractAudioFilter>mAudioFilters;
     private final SquelchStateListener mSquelchStateListener = new SquelchStateListener();
     private SquelchState mSquelchState = SquelchState.SQUELCH;
-    private final int mSquelchDelayTimeMs;
-    private final boolean mSquelchDelayRemoveSilence;
-    private ScheduledExecutorService mDelayExecutor;
-    private ScheduledFuture<?> mPendingClose;
 
     /**
      * Creates an Audio Module.
@@ -67,31 +58,8 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
      */
     public AudioModule(AliasList aliasList, int timeslot, long maxAudioSegmentLength, List<AbstractAudioFilter> audioFilters)
     {
-        this(aliasList, timeslot, maxAudioSegmentLength, audioFilters, 0, true);
-    }
-
-    /**
-     * Creates an Audio Module with squelch delay support.
-     *
-     * @param aliasList for aliasing identifiers
-     * @param timeslot for this audio module
-     * @param maxAudioSegmentLength in milliseconds
-     * @param audioFilters a list of audio filters to apply to the incoming audio samples
-     * @param squelchDelayTimeMs delay in milliseconds before closing the audio segment after squelch closes; 0 disables
-     * @param squelchDelayRemoveSilence true to drop the delay-window silence (continuous clip), false to preserve it
-     */
-    public AudioModule(AliasList aliasList, int timeslot, long maxAudioSegmentLength, List<AbstractAudioFilter> audioFilters,
-        int squelchDelayTimeMs, boolean squelchDelayRemoveSilence)
-    {
         super(aliasList, timeslot, maxAudioSegmentLength);
         mAudioFilters = audioFilters;
-        mSquelchDelayTimeMs = squelchDelayTimeMs;
-        mSquelchDelayRemoveSilence = squelchDelayRemoveSilence;
-
-        if(mSquelchDelayTimeMs > 0)
-        {
-            mDelayExecutor = Executors.newSingleThreadScheduledExecutor();
-        }
     }
 
     /**
@@ -103,8 +71,6 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
     {
         super(aliasList);
         mAudioFilters = audioFilters;
-        mSquelchDelayTimeMs = 0;
-        mSquelchDelayRemoveSilence = true;
     }
 
     @Override
@@ -122,23 +88,6 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
     @Override
     public void start()
     {
-    }
-
-    @Override
-    public void stop()
-    {
-        //Cancel any pending delayed close and shut down this module's delay scheduler so it cannot leak a thread.
-        if(mPendingClose != null && !mPendingClose.isDone())
-        {
-            mPendingClose.cancel(false);
-        }
-
-        if(mDelayExecutor != null)
-        {
-            mDelayExecutor.shutdownNow();
-        }
-
-        super.stop();
     }
 
     @Override
@@ -173,37 +122,10 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
     }
 
     /**
-     * Adds the specified duration of silence to the current audio segment, in 100ms chunks at the 8kHz audio rate.
-     * Used to preserve inter-transmission timing when the squelch delay window is configured to keep silence.
-     * @param durationMs duration of silence to add, in milliseconds
-     */
-    private void addSilence(int durationMs)
-    {
-        //800 samples == 100ms at 8kHz.  The buffer is never mutated, so it is safe to reuse across chunks.
-        int chunkSize = 800;
-        float[] silenceChunk = new float[chunkSize];
-
-        int remainingMs = durationMs;
-        while(remainingMs >= 100)
-        {
-            addAudio(silenceChunk);
-            remainingMs -= 100;
-        }
-
-        if(remainingMs > 0)
-        {
-            int remainingSamples = (AUDIO_SAMPLE_RATE * remainingMs) / 1000;
-            addAudio(new float[remainingSamples]);
-        }
-    }
-
-    /**
      * Wrapper for squelch state listener
      */
     public class SquelchStateListener implements Listener<SquelchStateEvent>
     {
-        private long mSquelchClosedTimestamp = 0;
-
         @Override
         public void receive(SquelchStateEvent event)
         {
@@ -215,53 +137,7 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
 
                 if(mSquelchState == SquelchState.SQUELCH)
                 {
-                    //Record when squelch closed so we can optionally back-fill silence if it reopens in the window.
-                    mSquelchClosedTimestamp = System.currentTimeMillis();
-
-                    //When a delay is configured, defer the close so a brief drop does not split the transmission.
-                    if(mSquelchDelayTimeMs > 0 && mDelayExecutor != null)
-                    {
-                        if(mPendingClose != null && !mPendingClose.isDone())
-                        {
-                            mPendingClose.cancel(false);
-                        }
-
-                        mPendingClose = mDelayExecutor.schedule(() ->
-                        {
-                            //Only close if still squelched when the delay elapses.
-                            if(mSquelchState == SquelchState.SQUELCH)
-                            {
-                                closeAudioSegment();
-                            }
-                        }, mSquelchDelayTimeMs, TimeUnit.MILLISECONDS);
-                    }
-                    else
-                    {
-                        closeAudioSegment();
-                    }
-                }
-                else
-                {
-                    //Squelch reopened - cancel any pending close so the segment continues as one clip.
-                    if(mPendingClose != null && !mPendingClose.isDone())
-                    {
-                        mPendingClose.cancel(false);
-
-                        //If preserving silence, back-fill the gap so inter-transmission timing is retained.
-                        if(!mSquelchDelayRemoveSilence && mSquelchClosedTimestamp > 0)
-                        {
-                            long elapsedMs = System.currentTimeMillis() - mSquelchClosedTimestamp;
-                            //Round up to the nearest 100ms to match the silence chunk increments.
-                            int silenceDuration = (int)(((elapsedMs + 99) / 100) * 100);
-
-                            if(silenceDuration > 0 && silenceDuration <= mSquelchDelayTimeMs)
-                            {
-                                addSilence(silenceDuration);
-                            }
-                        }
-                    }
-
-                    mSquelchClosedTimestamp = 0;
+                    closeAudioSegment();
                 }
             }
         }
