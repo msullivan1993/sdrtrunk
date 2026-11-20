@@ -74,6 +74,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
     private ToggleSwitch mALCEnable;
     private Spinner<Integer> mSquelchDelaySpinner;
     private ToggleSwitch mRemoveSilenceSwitch;
+    private ToggleSwitch mCtcssFineResolutionEnable;
     private TextFormatter<Integer> mTalkgroupTextFormatter;
     private ToggleSwitch mBasebandRecordSwitch;
     private SegmentedButton mBandwidthButton;
@@ -220,6 +221,9 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             GridPane.setConstraints(mCtcssCodeCombo, 4, 2);
             gridPane.getChildren().add(mCtcssCodeCombo);
 
+            GridPane.setConstraints(getCtcssFineResolutionEnable(), 5, 2);
+            gridPane.getChildren().add(getCtcssFineResolutionEnable());
+
             // DCS code selector
             mDcsCodeCombo = new ComboBox<>();
             mDcsCodeCombo.getItems().addAll(DCSCode.STANDARD_CODES);
@@ -280,14 +284,17 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             case SquelchDecoderConfig.SquelchType.NONE:
                 mCtcssCodeCombo.setVisible(false);
                 mDcsCodeCombo.setVisible(false);
+                getCtcssFineResolutionEnable().setVisible(false);
                 break;
             case SquelchDecoderConfig.SquelchType.CTCSS:
                 mCtcssCodeCombo.setVisible(true);
                 mDcsCodeCombo.setVisible(false);
+                getCtcssFineResolutionEnable().setVisible(true);
                 break;
             case SquelchDecoderConfig.SquelchType.DCS:
                 mCtcssCodeCombo.setVisible(false);
                 mDcsCodeCombo.setVisible(true);
+                getCtcssFineResolutionEnable().setVisible(false);
                 break;
         }
     }
@@ -453,6 +460,22 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         return mRemoveSilenceSwitch;
     }
 
+    private ToggleSwitch getCtcssFineResolutionEnable()
+    {
+        if(mCtcssFineResolutionEnable == null)
+        {
+            mCtcssFineResolutionEnable = new AccessibleToggleSwitch("Fine Tone Resolution");
+            mCtcssFineResolutionEnable.setTooltip(new Tooltip("Confirms the CTCSS tone against its neighbors over a " +
+                "longer window.  Use when the detected tone flips between adjacent tones (e.g. 91.5 / 94.8 / 97.4) " +
+                "and audio is choppy."));
+            mCtcssFineResolutionEnable.setVisible(false);
+            mCtcssFineResolutionEnable.selectedProperty()
+                .addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
+        }
+
+        return mCtcssFineResolutionEnable;
+    }
+
     private SegmentedButton getBandwidthButton()
     {
         if(mBandwidthButton == null)
@@ -599,6 +622,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
 
             getALCEnable().setDisable(false);
             getALCEnable().setSelected(decodeConfigNBFM.isAudioALC());
+            getCtcssFineResolutionEnable().setDisable(false);
+            getCtcssFineResolutionEnable().setSelected(decodeConfigNBFM.isCtcssFineResolution());
 
             getDeemphasisCombo().setValue(decodeConfigNBFM.getDeemphasis());
 
@@ -657,6 +682,8 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
             getAudioFilterEnable().setSelected(false);
             getALCEnable().setDisable(true);
             getALCEnable().setSelected(false);
+            getCtcssFineResolutionEnable().setDisable(true);
+            getCtcssFineResolutionEnable().setSelected(false);
 
             getDeemphasisCombo().setValue(DeemphasisMode.NONE);
             getSquelchDelaySpinner().setDisable(true);
@@ -698,6 +725,7 @@ public class NBFMConfigurationEditor extends ChannelConfigurationEditor
         config.setTalkgroup(talkgroup);
         config.setAudioFilter(getAudioFilterEnable().isSelected());
         config.setAudioALC(getALCEnable().isSelected());
+        config.setCtcssFineResolution(getCtcssFineResolutionEnable().isSelected());
 
         config.setDeemphasis(getDeemphasisCombo().getValue());
 
