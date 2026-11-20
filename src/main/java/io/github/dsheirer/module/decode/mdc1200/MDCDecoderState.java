@@ -22,12 +22,15 @@ import io.github.dsheirer.channel.state.DecoderState;
 import io.github.dsheirer.channel.state.DecoderStateEvent;
 import io.github.dsheirer.channel.state.DecoderStateEvent.Event;
 import io.github.dsheirer.channel.state.State;
+import io.github.dsheirer.identifier.Form;
 import io.github.dsheirer.identifier.IdentifierClass;
 import io.github.dsheirer.identifier.MutableIdentifierCollection;
+import io.github.dsheirer.identifier.Role;
 import io.github.dsheirer.message.IMessage;
 import io.github.dsheirer.module.decode.DecoderType;
 import io.github.dsheirer.module.decode.event.DecodeEventType;
 import io.github.dsheirer.module.decode.mdc1200.identifier.MDC1200Identifier;
+import io.github.dsheirer.module.decode.mdc1200.identifier.MDC1200RadioIdentifier;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -67,6 +70,18 @@ public class MDCDecoderState extends DecoderState
             MDCMessage mdc = (MDCMessage)message;
 
             mIdents.add(mdc.getFromIdentifier());
+
+            //Attach the unit ID of a PTT ID (pre or post) or emergency to the current call as the calling radio.  The
+            //existing identifier is removed first so that a repeat of the same unit ID is broadcast again: the audio
+            //module clears stale calling radio identifiers between calls.
+            MDCMessageType messageType = mdc.getMessageType();
+
+            if((messageType == MDCMessageType.ANI || messageType == MDCMessageType.EMERGENCY) &&
+                mdc.getFromIdentifier().getValue() > 0)
+            {
+                getIdentifierCollection().remove(IdentifierClass.USER, Form.RADIO, Role.FROM);
+                getIdentifierCollection().update(MDC1200RadioIdentifier.createFrom(mdc.getFromIdentifier().getValue()));
+            }
 
             if(mdc.isEmergency())
             {
