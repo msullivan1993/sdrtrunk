@@ -637,7 +637,7 @@ public class ThinlineRadioCoreBroadcaster extends AbstractAudioBroadcaster<Thinl
         {
             if(identifier instanceof RadioIdentifier radioIdentifier)
             {
-                return radioIdentifier.getValue().toString();
+                return String.valueOf(radioIdentifier.getStreamingValue());
             }
         }
         return "0";
