@@ -196,7 +196,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private final Listener<ChannelEvent> mChannelEventListener;
     private final P25TrafficChannelManager mTrafficChannelManager;
     private ServiceOptions mCurrentServiceOptions;
-    private final Integer mNacFilter;
+    private final P25P1NacGate mNacGate;
 
     //Phantom TDU suppression.  On LSM simulcast the framer can decode a TDU at an LDU boundary in the middle of a
     //continuous voice stream.  Upstream ends the call on every TDU, which fragments the call.  A TDU that arrives while
@@ -230,7 +230,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
         mChannel = channel;
         DecodeConfigP25Phase1 config = (DecodeConfigP25Phase1)channel.getDecodeConfiguration();
         mModulation = config.getModulation();
-        mNacFilter = config.getNacFilter();
+        mNacGate = new P25P1NacGate(config.getNacFilter());
         mNetworkConfigurationMonitor = new P25P1NetworkConfigurationMonitor(mModulation);
 
         if(trafficChannelManager != null)
@@ -304,16 +304,11 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     @Override
     public void receive(IMessage iMessage)
     {
-        //NAC filtering - discard messages that don't match the configured NAC.  Applied first so that filtered
-        //messages are invisible to phantom TDU resolution and to the quality monitor.
-        if(mNacFilter != null && mNacFilter > 0 && iMessage instanceof P25P1Message filtered)
+        //NAC filter: drop messages from co-channel transmitters with a non-matching NAC.  Applied first so that
+        //filtered messages are invisible to phantom TDU resolution and to the quality monitor.
+        if(iMessage instanceof P25P1Message && !mNacGate.passes(iMessage))
         {
-            Identifier nacIdentifier = filtered.getNAC();
-
-            if(nacIdentifier instanceof APCO25Nac nac && nac.getValue() != mNacFilter.intValue())
-            {
-                return;
-            }
+            return;
         }
 
         boolean consumed = mPendingTDU != null && resolvePendingTDU(iMessage);
@@ -2324,6 +2319,7 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                 resetState();
                 mTalkerAliasTracker.reset();
                 mNetworkConfigurationMonitor.reset();
+                mNacGate.reset();
                 break;
             case NOTIFICATION_SOURCE_FREQUENCY:
                 long frequency = event.getFrequency();

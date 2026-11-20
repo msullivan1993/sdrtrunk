@@ -26,6 +26,7 @@ import io.github.dsheirer.gui.playlist.record.RecordConfigurationEditor;
 import io.github.dsheirer.gui.playlist.source.FrequencyEditor;
 import io.github.dsheirer.gui.playlist.source.SourceConfigurationEditor;
 import io.github.dsheirer.module.decode.DecoderType;
+import io.github.dsheirer.module.decode.config.AccessCodeFilter;
 import io.github.dsheirer.module.decode.config.AuxDecodeConfiguration;
 import io.github.dsheirer.module.decode.config.DecodeConfiguration;
 import io.github.dsheirer.module.decode.p25.phase1.DecodeConfigP25Phase1;
@@ -48,7 +49,6 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
-import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.Toggle;
 import javafx.scene.control.ToggleButton;
@@ -79,12 +79,11 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
     private SegmentedButton mModulationSegmentedButton;
     private ToggleButton mC4FMToggleButton;
     private ToggleButton mLSMToggleButton;
-    private TextField mNacFilterField;
-    private ToggleSwitch mNacFilterEnable;
     private ToggleSwitch mJmbeAGCButton;
     private Slider mJmbeToneGainSlider;
     private ToggleSwitch mLegacyToneLevelsButton;
     private Slider mJmbeNoiseGainSlider;
+    private AccessCodeFilterEditor mNacFilterEditor;
 
     /**
      * Constructs an instance
@@ -178,26 +177,13 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
 
             row++;
 
-            addAudioControls(gridPane, row, "AMBE/IMBE Audio", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
-                getJmbeToneGainSlider(), getLegacyToneLevelsButton());
+            GridPane.setConstraints(getNacFilterEditor(), 0, row, 8, 1);
+            gridPane.getChildren().add(getNacFilterEditor());
 
             row++;
 
-            // NAC Filter row
-            GridPane.setConstraints(getNacFilterEnable(), 0, row);
-            gridPane.getChildren().add(getNacFilterEnable());
-
-            Label nacFilterLabel = new Label("NAC Filter");
-            GridPane.setHalignment(nacFilterLabel, HPos.LEFT);
-            GridPane.setConstraints(nacFilterLabel, 1, row);
-            gridPane.getChildren().add(nacFilterLabel);
-
-            GridPane.setConstraints(getNacFilterField(), 2, row);
-            gridPane.getChildren().add(getNacFilterField());
-
-            Label nacHelpLabel = new Label("Enter NAC in hex (e.g., 293) - only process traffic matching this NAC");
-            GridPane.setConstraints(nacHelpLabel, 3, row, 3, 1);
-            gridPane.getChildren().add(nacHelpLabel);
+            addAudioControls(gridPane, row, "AMBE/IMBE Audio", getJmbeNoiseGainSlider(), getJmbeAGCButton(),
+                getJmbeToneGainSlider(), getLegacyToneLevelsButton());
 
             mDecoderPane.setContent(gridPane);
         }
@@ -389,6 +375,17 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
         return mIgnoreEncryptedCallsButton;
     }
 
+    private AccessCodeFilterEditor getNacFilterEditor()
+    {
+        if(mNacFilterEditor == null)
+        {
+            mNacFilterEditor = new AccessCodeFilterEditor("NAC", DecodeConfigP25Phase1.NAC_MAXIMUM, 3, true,
+                AccessCodeFilter.Format.HEX, modifiedProperty());
+        }
+
+        return mNacFilterEditor;
+    }
+
     private ToggleSwitch getIgnoreDataCallsButton()
     {
         if(mIgnoreDataCallsButton == null)
@@ -400,36 +397,6 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
         }
 
         return mIgnoreDataCallsButton;
-    }
-
-    private ToggleSwitch getNacFilterEnable()
-    {
-        if(mNacFilterEnable == null)
-        {
-            mNacFilterEnable = new ToggleSwitch();
-            mNacFilterEnable.setDisable(true);
-            mNacFilterEnable.setTooltip(new Tooltip("Enable NAC filtering - only process traffic with matching NAC"));
-            mNacFilterEnable.selectedProperty().addListener((observable, oldValue, newValue) -> {
-                modifiedProperty().set(true);
-                getNacFilterField().setDisable(!newValue);
-            });
-        }
-
-        return mNacFilterEnable;
-    }
-
-    private TextField getNacFilterField()
-    {
-        if(mNacFilterField == null)
-        {
-            mNacFilterField = new TextField();
-            mNacFilterField.setDisable(true);
-            mNacFilterField.setPrefWidth(80);
-            mNacFilterField.setTooltip(new Tooltip("NAC value in hexadecimal (000-FFF)"));
-            mNacFilterField.textProperty().addListener((observable, oldValue, newValue) -> modifiedProperty().set(true));
-        }
-
-        return mNacFilterField;
     }
 
     private Spinner<Integer> getTrafficChannelPoolSizeSpinner()
@@ -476,10 +443,11 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
         getIgnoreDataCallsButton().setDisable(config == null);
         getIgnoreEncryptedCallsButton().setDisable(config == null);
         getTrafficChannelPoolSizeSpinner().setDisable(config == null);
-        getNacFilterEnable().setDisable(config == null);
+        getNacFilterEditor().setEditorDisabled(config == null);
 
         if(config instanceof DecodeConfigP25Phase1 decodeConfig)
         {
+            getNacFilterEditor().setFilter(decodeConfig.getNacFilter());
             getIgnoreDataCallsButton().setSelected(decodeConfig.getIgnoreDataCalls());
             getIgnoreEncryptedCallsButton().setSelected(decodeConfig.getIgnoreEncryptedCalls());
             getTrafficChannelPoolSizeSpinner().getValueFactory().setValue(decodeConfig.getTrafficChannelPoolSize());
@@ -492,20 +460,6 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
             {
                 getC4FMToggleButton().setSelected(false);
                 getLSMToggleButton().setSelected(true);
-            }
-
-            // NAC Filter
-            if(decodeConfig.hasNacFilter())
-            {
-                getNacFilterEnable().setSelected(true);
-                getNacFilterField().setDisable(false);
-                getNacFilterField().setText(String.format("%03X", decodeConfig.getNacFilter()));
-            }
-            else
-            {
-                getNacFilterEnable().setSelected(false);
-                getNacFilterField().setDisable(true);
-                getNacFilterField().setText("");
             }
 
             getJmbeAGCButton().setDisable(false);
@@ -523,9 +477,7 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
             getIgnoreDataCallsButton().setSelected(false);
             getIgnoreEncryptedCallsButton().setSelected(false);
             getTrafficChannelPoolSizeSpinner().getValueFactory().setValue(0);
-            getNacFilterEnable().setSelected(false);
-            getNacFilterField().setDisable(true);
-            getNacFilterField().setText("");
+            getNacFilterEditor().setFilter(null);
             getJmbeAGCButton().setDisable(true);
             getJmbeNoiseGainSlider().setDisable(true);
             getJmbeToneGainSlider().setDisable(true);
@@ -556,35 +508,11 @@ public class P25P1ConfigurationEditor extends ChannelConfigurationEditor
         config.setTrafficChannelPoolSize(getTrafficChannelPoolSizeSpinner().getValue());
         config.setModulation(getC4FMToggleButton().isSelected() ? Modulation.C4FM : Modulation.CQPSK);
 
-        // NAC Filter
-        if(getNacFilterEnable().isSelected() && !getNacFilterField().getText().isEmpty())
-        {
-            try
-            {
-                int nac = Integer.parseInt(getNacFilterField().getText().trim(), 16);
-                if(nac >= 0 && nac <= 0xFFF)
-                {
-                    config.setNacFilter(nac);
-                }
-                else
-                {
-                    config.setNacFilter(null);
-                }
-            }
-            catch(NumberFormatException e)
-            {
-                config.setNacFilter(null);
-            }
-        }
-        else
-        {
-            config.setNacFilter(null);
-        }
-
         config.setAGC(getJmbeAGCButton().selectedProperty().getValue());
         config.setComfortNoiseGain((float)getJmbeNoiseGainSlider().getValue());
         config.setToneGain((float)getJmbeToneGainSlider().getValue());
         config.setLegacyToneLevels(getLegacyToneLevelsButton().isSelected());
+        config.setNacFilter(getNacFilterEditor().getFilter());
         getItem().setDecodeConfiguration(config);
     }
 

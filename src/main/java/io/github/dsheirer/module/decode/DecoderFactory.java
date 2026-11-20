@@ -352,8 +352,8 @@ public class DecoderFactory
             }
 
             P25P1AudioModule audioModule = new P25P1AudioModule(userPreferences, aliasList);
-            audioModule.setNacFilter(configP25P1.getNacFilter());
             configureJMBEAudioModule(audioModule, configP25P1);
+            audioModule.setNacFilter(configP25P1.getNacFilter());
             modules.add(audioModule);
 
             //Add a channel rotation monitor when we have multiple control channel frequencies specified

@@ -18,7 +18,6 @@
  */
 package io.github.dsheirer.module.decode.p25.phase1;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonSubTypes;
 import com.fasterxml.jackson.annotation.JsonTypeInfo;
@@ -36,7 +35,6 @@ public abstract class DecodeConfigP25 extends DecodeConfigJMBE
 {
     private int mTrafficChannelPoolSize = TRAFFIC_CHANNEL_LIMIT_DEFAULT;
     private boolean mIgnoreDataCalls = false;
-    private Integer mNacFilter = null;
     private boolean mIgnoreEncryptedCalls = false;
 
     public DecodeConfigP25()
@@ -93,32 +91,4 @@ public abstract class DecodeConfigP25 extends DecodeConfigJMBE
         mTrafficChannelPoolSize = size;
     }
 
-    /**
-     * NAC filter value. When set, only messages with matching NAC will be processed.
-     * @return NAC filter value or null if disabled
-     */
-    @JacksonXmlProperty(isAttribute = true, localName = "nac_filter")
-    public Integer getNacFilter()
-    {
-        return mNacFilter;
-    }
-
-    /**
-     * Sets the NAC filter value.
-     * @param nac to filter on, or null to disable filtering
-     */
-    public void setNacFilter(Integer nac)
-    {
-        mNacFilter = nac;
-    }
-
-    /**
-     * Indicates if NAC filtering is enabled.
-     * @return true if a NAC filter is configured
-     */
-    @JsonIgnore
-    public boolean hasNacFilter()
-    {
-        return mNacFilter != null && mNacFilter > 0;
-    }
 }
