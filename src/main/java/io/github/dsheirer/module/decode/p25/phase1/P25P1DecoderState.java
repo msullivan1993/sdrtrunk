@@ -207,7 +207,6 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private P25P1Message mPendingTDU;
     private long mLastLDUTimestamp;
     private long mPhantomTDUCount;
-    private P25P1QualityMonitor mQualityMonitor;
 
     /**
      * Encryption state of the current call as signalled by the algorithm ID in the HDU header or LDU2 encryption sync
@@ -305,14 +304,13 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     public void receive(IMessage iMessage)
     {
         //NAC filter: drop messages from co-channel transmitters with a non-matching NAC.  Applied first so that
-        //filtered messages are invisible to phantom TDU resolution and to the quality monitor.
+        //filtered messages are invisible to phantom TDU resolution.
         if(iMessage instanceof P25P1Message && !mNacGate.passes(iMessage))
         {
             return;
         }
 
         boolean consumed = mPendingTDU != null && resolvePendingTDU(iMessage);
-        getQualityMonitor().receive(iMessage);
 
         if(consumed)
         {
@@ -1014,7 +1012,6 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
                  next.getDUID() == P25P1DataUnitID.LOGICAL_LINK_DATA_UNIT_2))
         {
             mPhantomTDUCount++;
-            getQualityMonitor().phantomTDU();
 
             if(mPhantomTDUCount <= 10 || mPhantomTDUCount % 100 == 0)
             {
@@ -1045,22 +1042,8 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     /**
      * Process Terminator Data Unit (TDU).
      */
-    /**
-     * Lazy constructor for the decode-quality monitor.
-     */
-    private P25P1QualityMonitor getQualityMonitor()
-    {
-        if(mQualityMonitor == null)
-        {
-            mQualityMonitor = new P25P1QualityMonitor(mChannel);
-        }
-
-        return mQualityMonitor;
-    }
-
     private void processTDU(P25P1Message message)
     {
-        getQualityMonitor().terminator();
         mCallEncryptedByAlgorithm = null;
         mTrafficChannelManager.processP1TrafficCallEnd(getCurrentFrequency(), message.getTimestamp(), "TDU:" + message);
         clearCallUser();
@@ -1093,7 +1076,6 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
 
             if(lcw != null && lcw.isValid())
             {
-                getQualityMonitor().terminator();
                 mCallEncryptedByAlgorithm = null;
                 mTrafficChannelManager.processP1TrafficCallEnd(getCurrentFrequency(), message.getTimestamp(), "TDULC:" + message);
                 broadcast(new DecoderStateEvent(this, Event.DECODE, State.ACTIVE));
