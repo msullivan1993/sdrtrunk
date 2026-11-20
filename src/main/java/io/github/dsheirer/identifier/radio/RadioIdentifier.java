@@ -48,6 +48,14 @@ public abstract class RadioIdentifier extends IntegerIdentifier
     }
 
     /**
+     * Value to report to streaming services that only accept a numeric radio ID.  Defaults to the radio ID value.
+     */
+    public int getStreamingValue()
+    {
+        return getValue();
+    }
+
+    /**
      * Overrides to compare just the radio value, class, form, role and protocol.  This allows a fully qualified
      * radio identifier to be equivalent to a standard radio identifier for the traffic channel manager.
      */

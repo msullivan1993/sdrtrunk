@@ -23,6 +23,8 @@ import io.github.dsheirer.audio.squelch.ISquelchStateListener;
 import io.github.dsheirer.audio.squelch.SquelchState;
 import io.github.dsheirer.audio.squelch.SquelchStateEvent;
 import io.github.dsheirer.dsp.filter.FilterFactory;
+import io.github.dsheirer.identifier.IdentifierUpdateNotification;
+import io.github.dsheirer.identifier.Role;
 import io.github.dsheirer.dsp.filter.design.FilterDesignException;
 import io.github.dsheirer.dsp.filter.fir.FIRFilterSpecification;
 import io.github.dsheirer.dsp.filter.fir.real.IRealFilter;
@@ -61,6 +63,16 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
     private ScheduledFuture<?> mPendingClose;
     private long mSquelchClosedNanos = 0;
     private long mSquelchGeneration = 0;
+
+    /**
+     * Calling radio (FROM) identifiers from analog signalling (e.g. an MDC-1200 PTT ID) belong to one transmission.
+     * When a new call opens, a FROM identifier older than this is left over from an earlier call and is removed, so
+     * that it isn't attached to a call from a radio that sent no ID.  A pre-ID can decode shortly before the squelch
+     * opens (e.g. while a CTCSS-gated squelch is still confirming the tone), so recent identifiers are kept.
+     */
+    private static final long STALE_FROM_IDENTIFIER_NANOS = TimeUnit.MILLISECONDS.toNanos(750);
+    private long mLastFromIdentifierNanos = 0;
+    private Listener<IdentifierUpdateNotification> mIdentifierUpdateListener;
 
     /**
      * Creates an Audio Module.
@@ -200,6 +212,42 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
         }
     }
 
+    /**
+     * Wraps the identifier update listener to track when calling radio (FROM) identifiers arrive.
+     */
+    @Override
+    public Listener<IdentifierUpdateNotification> getIdentifierUpdateListener()
+    {
+        if(mIdentifierUpdateListener == null)
+        {
+            Listener<IdentifierUpdateNotification> listener = super.getIdentifierUpdateListener();
+
+            mIdentifierUpdateListener = notification -> {
+                if((notification.isAdd() || notification.isSilentAdd()) &&
+                    notification.getIdentifier().getRole() == Role.FROM)
+                {
+                    mLastFromIdentifierNanos = System.nanoTime();
+                }
+
+                listener.receive(notification);
+            };
+        }
+
+        return mIdentifierUpdateListener;
+    }
+
+    /**
+     * Removes calling radio (FROM) identifiers left over from an earlier call, when a new call opens.
+     */
+    private void removeStaleFromIdentifiers()
+    {
+        if(System.nanoTime() - mLastFromIdentifierNanos > STALE_FROM_IDENTIFIER_NANOS &&
+            !getIdentifierCollection().getIdentifiers(Role.FROM).isEmpty())
+        {
+            getIdentifierCollection().remove(Role.FROM);
+        }
+    }
+
     @Override
     public Listener<SquelchStateEvent> getSquelchStateListener()
     {
@@ -260,17 +308,30 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
                 else if(mHangTimeMs > 0)
                 {
                     //Squelch reopened.  If it reopened within the hang time, the audio continues in the same segment.
-                    if(cancelPendingClose() && !mHangTimeRemoveSilence && mSquelchClosedNanos > 0)
+                    if(cancelPendingClose())
                     {
-                        long gapMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - mSquelchClosedNanos);
-
-                        if(gapMs > 0 && gapMs <= mHangTimeMs)
+                        if(!mHangTimeRemoveSilence && mSquelchClosedNanos > 0)
                         {
-                            addSilence((int)gapMs);
+                            long gapMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - mSquelchClosedNanos);
+
+                            if(gapMs > 0 && gapMs <= mHangTimeMs)
+                            {
+                                addSilence((int)gapMs);
+                            }
                         }
+                    }
+                    else
+                    {
+                        //New call
+                        removeStaleFromIdentifiers();
                     }
 
                     mSquelchClosedNanos = 0;
+                }
+                else
+                {
+                    //New call
+                    removeStaleFromIdentifiers();
                 }
             }
         }

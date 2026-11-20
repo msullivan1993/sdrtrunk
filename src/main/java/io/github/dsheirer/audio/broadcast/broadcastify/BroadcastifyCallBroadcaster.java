@@ -450,7 +450,7 @@ public class BroadcastifyCallBroadcaster extends AbstractAudioBroadcaster<Broadc
         {
             if(identifier instanceof RadioIdentifier)
             {
-                return ((RadioIdentifier)identifier).getValue().toString();
+                return String.valueOf(((RadioIdentifier)identifier).getStreamingValue());
             }
         }
 

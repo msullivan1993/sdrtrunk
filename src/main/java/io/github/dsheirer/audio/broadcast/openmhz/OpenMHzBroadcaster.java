@@ -406,7 +406,7 @@ import org.slf4j.LoggerFactory;
          {
              if(identifier instanceof RadioIdentifier)
              {
-                 return ((RadioIdentifier)identifier).getValue().toString();
+                 return String.valueOf(((RadioIdentifier)identifier).getStreamingValue());
              }
          }
 
