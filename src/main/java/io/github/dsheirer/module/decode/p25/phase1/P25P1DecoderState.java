@@ -304,8 +304,10 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     public void receive(IMessage iMessage)
     {
         //NAC filter: drop messages from co-channel transmitters with a non-matching NAC.  Applied first so that
-        //filtered messages are invisible to phantom TDU resolution.
-        if(iMessage instanceof P25P1Message && !mNacGate.passes(iMessage))
+        //filtered messages are invisible to phantom TDU resolution.  Talker alias and link control messages assembled
+        //by the message processor carry no NAC, so they follow the decision for the most recent message that did (the
+        //LDU/TDULC fragments that they were assembled from).
+        if(isNacFiltered(iMessage) && !mNacGate.passes(iMessage))
         {
             return;
         }
@@ -390,6 +392,16 @@ public class P25P1DecoderState extends DecoderState implements IChannelEventList
     private TalkerAliasManager getTalkerAliasManager()
     {
         return mTrafficChannelManager.getTalkerAliasManager();
+    }
+
+    /**
+     * Indicates if the message is subject to the NAC filter: P25 Phase 1 messages, which carry the NAC, and the
+     * talker alias and link control messages that the message processor assembles from them.
+     */
+    private static boolean isNacFiltered(IMessage message)
+    {
+        return message instanceof P25P1Message || message instanceof MotorolaTalkerAliasComplete ||
+            message instanceof LinkControlWord;
     }
 
     /**
