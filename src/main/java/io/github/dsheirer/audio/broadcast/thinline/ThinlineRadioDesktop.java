@@ -23,9 +23,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 import io.github.dsheirer.audio.playback.AudioOutput;
-import java.awt.Frame;
+import io.github.dsheirer.gui.FxToolkit;
 import java.awt.Graphics2D;
-import java.awt.GraphicsConfiguration;
 import java.awt.GraphicsEnvironment;
 import java.awt.Rectangle;
 import java.awt.Robot;
@@ -37,14 +36,17 @@ import java.util.function.Consumer;
 import java.util.Iterator;
 import java.util.Base64;
 import java.util.function.BooleanSupplier;
+import java.util.function.Supplier;
+import javafx.application.Platform;
+import javafx.geometry.Rectangle2D;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
 import java.util.function.Predicate;
 import javax.imageio.IIOImage;
 import javax.imageio.ImageIO;
 import javax.imageio.ImageWriteParam;
 import javax.imageio.ImageWriter;
 import javax.imageio.stream.MemoryCacheImageOutputStream;
-import javax.swing.JFrame;
-import javax.swing.SwingUtilities;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,7 +60,7 @@ class ThinlineRadioDesktop
     private static final int MAX_WIDTH = 3840;
     private static final long FRAME_MS = 200;
 
-    private final JFrame mFrame;
+    private final Supplier<Stage> mStage;
     private final Predicate<ObjectNode> mSend;
     private final Consumer<ObjectNode> mQueue;
     private final BooleanSupplier mReady;
@@ -76,9 +78,9 @@ class ThinlineRadioDesktop
     private int mAudioChannels = 1;
     private int mAudioRate = 8000;
 
-    ThinlineRadioDesktop(JFrame frame, Predicate<ObjectNode> send, Consumer<ObjectNode> queue, BooleanSupplier ready)
+    ThinlineRadioDesktop(Supplier<Stage> stage, Predicate<ObjectNode> send, Consumer<ObjectNode> queue, BooleanSupplier ready)
     {
-        mFrame = frame;
+        mStage = stage;
         mSend = send;
         mQueue = queue;
         mReady = ready;
@@ -167,17 +169,20 @@ class ThinlineRadioDesktop
 
     private void raiseFrame()
     {
-        if(mFrame == null)
+        Stage stage = mStage != null ? mStage.get() : null;
+
+        if(stage == null)
         {
             return;
         }
-        SwingUtilities.invokeLater(() -> {
-            if((mFrame.getExtendedState() & Frame.ICONIFIED) == Frame.ICONIFIED)
+
+        Platform.runLater(() -> {
+            if(stage.isIconified())
             {
-                mFrame.setExtendedState(Frame.NORMAL);
+                stage.setIconified(false);
             }
-            mFrame.setVisible(true);
-            mFrame.toFront();
+            stage.show();
+            stage.toFront();
         });
     }
 
@@ -295,16 +300,36 @@ class ThinlineRadioDesktop
         mQueue.accept(body);
     }
 
+    /**
+     * Bounds of the screen that holds the main window, in the same user-space coordinates that java.awt.Robot uses,
+     * or the default screen when there is no main window (headless) or its screen can't be determined.
+     */
     private Rectangle screenBounds()
     {
-        if(mFrame != null)
+        Stage stage = mStage != null ? mStage.get() : null;
+
+        if(stage != null)
         {
-            GraphicsConfiguration configuration = mFrame.getGraphicsConfiguration();
-            if(configuration != null)
+            try
             {
-                return configuration.getBounds();
+                Rectangle2D bounds = FxToolkit.callAndWait(() -> {
+                    var screens = Screen.getScreensForRectangle(stage.getX(), stage.getY(),
+                        Math.max(1, stage.getWidth()), Math.max(1, stage.getHeight()));
+                    return screens.isEmpty() ? null : screens.get(0).getBounds();
+                });
+
+                if(bounds != null)
+                {
+                    return new Rectangle((int)Math.round(bounds.getMinX()), (int)Math.round(bounds.getMinY()),
+                        (int)Math.round(bounds.getWidth()), (int)Math.round(bounds.getHeight()));
+                }
+            }
+            catch(Exception e)
+            {
+                //Fall through to the default screen
             }
         }
+
         return GraphicsEnvironment.getLocalGraphicsEnvironment().getDefaultScreenDevice().getDefaultConfiguration().getBounds();
     }
 

@@ -50,7 +50,6 @@ import java.net.URI;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import javax.swing.JFrame;
 import javafx.application.Platform;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -64,6 +63,8 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledFuture;
+import java.util.function.Supplier;
+import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -114,7 +115,7 @@ public class ThinlineRadioHealthReporter
     public ThinlineRadioHealthReporter(UserPreferences userPreferences, BroadcastModel broadcastModel,
                                        ChannelModel channelModel, ChannelProcessingManager channelProcessingManager,
                                        TunerManager tunerManager, AliasModel aliasModel, ChannelMapModel channelMapModel,
-                                       JFrame frame)
+                                       Supplier<Stage> stage)
     {
         mUserPreferences = userPreferences;
         mBroadcastModel = broadcastModel;
@@ -124,7 +125,7 @@ public class ThinlineRadioHealthReporter
         mControl = new ThinlineRadioControl(userPreferences, broadcastModel, channelModel, channelProcessingManager,
             tunerManager, aliasModel, channelMapModel, node -> mSocket.send(node), this::snapshotBroadcasts,
             this::remotePermissions);
-        mDesktop = new ThinlineRadioDesktop(frame, mSocket::trySend, mSocket::send, mSocket::isReady);
+        mDesktop = new ThinlineRadioDesktop(stage, mSocket::trySend, mSocket::send, mSocket::isReady);
     }
 
     public void start()
