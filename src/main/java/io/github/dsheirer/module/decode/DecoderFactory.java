@@ -567,6 +567,7 @@ public class DecoderFactory
 
             NXDNAudioModule audioModule = new NXDNAudioModule(userPreferences, aliasList);
             configureJMBEAudioModule(audioModule, configNXDN);
+            audioModule.setRanFilter(configNXDN.getRanFilter());
             modules.add(audioModule);
 
             if(channel.getChannelType() == ChannelType.STANDARD)
