@@ -131,7 +131,7 @@ public class DecoderFactory
     private final static Logger mLog = LoggerFactory.getLogger(DecoderFactory.class);
     private static final double FM_CHANNEL_BANDWIDTH = 12500.0;
     private static final boolean AUDIO_FILTER_ENABLE = true;
-    private static final int MDC1200_POST_ID_HANG_TIME_MS = 300;
+    private static final int POST_ID_HANG_TIME_MS = 300;
 
     /**
      * Returns a list of one primary decoder and any auxiliary decoders, as
@@ -515,14 +515,15 @@ public class DecoderFactory
             filterList.add(new AudioGainFilter(1, 10, 0.90f));
         }
 
-        //MDC-1200 post-ID is sent at the end of the transmission and can finish decoding as the squelch closes, so
-        //keep the call open briefly so that the post-ID unit ID still attaches to the call.
+        //MDC-1200 and Fleetsync post-IDs are sent at the end of the transmission and can finish decoding as the squelch
+        //closes, so keep the call open briefly so that the post-ID unit ID still attaches to the call.
         int hangTimeMs = decodeConfigNBFM.getHangTimeMs();
 
         if(channel.getAuxDecodeConfiguration() != null &&
-            channel.getAuxDecodeConfiguration().getAuxDecoders().contains(DecoderType.MDC1200))
+            (channel.getAuxDecodeConfiguration().getAuxDecoders().contains(DecoderType.MDC1200) ||
+             channel.getAuxDecodeConfiguration().getAuxDecoders().contains(DecoderType.FLEETSYNC2)))
         {
-            hangTimeMs = Math.max(hangTimeMs, MDC1200_POST_ID_HANG_TIME_MS);
+            hangTimeMs = Math.max(hangTimeMs, POST_ID_HANG_TIME_MS);
         }
 
         modules.add(new AudioModule(aliasList, 0, 60000, filterList, hangTimeMs,

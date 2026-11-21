@@ -26,6 +26,7 @@ import io.github.dsheirer.edac.CRCFleetsync;
 import io.github.dsheirer.message.Message;
 import io.github.dsheirer.module.decode.fleetsync2.FleetsyncMessageType;
 import io.github.dsheirer.module.decode.fleetsync2.identifier.FleetsyncIdentifier;
+import io.github.dsheirer.module.decode.fleetsync2.identifier.FleetsyncRadioIdentifier;
 import io.github.dsheirer.protocol.Protocol;
 
 import java.util.BitSet;
@@ -108,6 +109,15 @@ public abstract class Fleetsync2Message extends Message
         }
 
         return mFromIdentifier;
+    }
+
+    /**
+     * Calling unit (fleet and ident) as a radio identifier.  Unlike the FROM talkgroup identifier, the fleet and the
+     * ident are kept as transmitted, without packing them into a 12-bit ident field.
+     */
+    public FleetsyncRadioIdentifier getFromRadioIdentifier()
+    {
+        return FleetsyncRadioIdentifier.createFrom(getMessage().getInt(FLEET) + 99, getFromIdent());
     }
 
     /**
