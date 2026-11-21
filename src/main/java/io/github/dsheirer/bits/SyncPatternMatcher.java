@@ -51,6 +51,18 @@ public class SyncPatternMatcher
         }
     }
 
+    /**
+     * Constructs a sync pattern matcher that tolerates bit errors in the sync pattern (soft mode).
+     * @param syncPattern to match
+     * @param softModeErrorThreshold maximum number of bit errors allowed in a match
+     */
+    public SyncPatternMatcher(boolean[] syncPattern, int softModeErrorThreshold)
+    {
+        this(syncPattern);
+        mSoftModeErrorThreshold = softModeErrorThreshold;
+        mSoftMode = softModeErrorThreshold > 0;
+    }
+
     public SyncPatternMatcher(long sync)
     {
         mSync = sync;

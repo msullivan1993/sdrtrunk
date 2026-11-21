@@ -63,9 +63,8 @@ public class MDCDecoderState extends DecoderState
     @Override
     public void receive(IMessage message)
     {
-        if(message instanceof MDCMessage)
+        if(message instanceof MDCMessage mdc && mdc.isValid())
         {
-            MDCMessage mdc = (MDCMessage)message;
 
             mIdents.add(mdc.getFromIdentifier());
 

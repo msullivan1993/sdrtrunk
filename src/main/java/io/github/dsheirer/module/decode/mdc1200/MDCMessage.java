@@ -48,7 +48,13 @@ public class MDCMessage extends Message
     private static int[] DIGIT_3 = {71, 70, 69, 68};
     private static int[] IDENTITY = {63, 62, 61, 60, 59, 58, 57, 56, 71, 70, 69, 68, 67, 66, 65, 64};
 
+    private static final int PACKET_1_OFFSET = 40;
+    private static final int PACKET_LENGTH = 112;
+    private static final int DATA_LENGTH = 56;
+    private static final int[] PARITY_TAPS = {0, 2, 5, 6};
+
     private CorrectedBinaryMessage mMessage;
+    private Boolean mValid;
     private MDC1200Identifier mFromIdentifier;
     private List<Identifier> mIdentifiers;
 
@@ -84,10 +90,160 @@ public class MDCMessage extends Message
         return mIdentifiers;
     }
 
+    /**
+     * Indicates if the first packet passes its CRC check, after error correction when needed.
+     */
     public boolean isValid()
     {
-        //TODO: add CRC and/or convolution decoding/repair
-        return true;
+        if(mValid == null)
+        {
+            mValid = checkAndCorrect(getMessage(), PACKET_1_OFFSET);
+        }
+
+        return mValid;
+    }
+
+    /**
+     * Checks the CRC of the packet at the offset and, when the CRC fails, attempts to correct bit errors using the
+     * packet's convolutional code.  Corrections are applied to the message only when the corrected packet passes the
+     * CRC check.
+     *
+     * A packet is 112 de-interleaved bits: 56 data bits (7 bytes, transmitted LSB first: opcode, argument, unit ID
+     * high and low bytes, CRC low and high bytes and a status byte) followed by 56 parity bits.  Parity bit i is the
+     * XOR of data bits i, i-2, i-5 and i-6 (rate 1/2, K=7 self-orthogonal code), so each data bit is checked by four
+     * parity bits and a data bit is corrected when three or more of its four parity checks fail.  The CRC is
+     * CRC-16/CCITT (reflected, initial value 0, output inverted) over the first four data bytes.
+     *
+     * @param message containing the de-interleaved packet
+     * @param offset to the start of the packet
+     * @return true if the packet passes the CRC check
+     */
+    static boolean checkAndCorrect(CorrectedBinaryMessage message, int offset)
+    {
+        if(message.size() < offset + PACKET_LENGTH)
+        {
+            return false;
+        }
+
+        boolean[] data = new boolean[DATA_LENGTH];
+        boolean[] parity = new boolean[DATA_LENGTH];
+
+        for(int x = 0; x < DATA_LENGTH; x++)
+        {
+            data[x] = message.get(offset + x);
+            parity[x] = message.get(offset + DATA_LENGTH + x);
+        }
+
+        if(crcPasses(data))
+        {
+            return true;
+        }
+
+        boolean[] syndrome = new boolean[DATA_LENGTH];
+
+        for(int x = 0; x < DATA_LENGTH; x++)
+        {
+            boolean check = parity[x];
+
+            for(int tap : PARITY_TAPS)
+            {
+                if(x - tap >= 0)
+                {
+                    check ^= data[x - tap];
+                }
+            }
+
+            syndrome[x] = check;
+        }
+
+        int corrected = 0;
+
+        for(int x = 0; x < DATA_LENGTH; x++)
+        {
+            int checks = 0;
+            int failed = 0;
+
+            for(int tap : PARITY_TAPS)
+            {
+                if(x + tap < DATA_LENGTH)
+                {
+                    checks++;
+
+                    if(syndrome[x + tap])
+                    {
+                        failed++;
+                    }
+                }
+            }
+
+            if(checks >= 3 && failed >= 3)
+            {
+                data[x] = !data[x];
+                corrected++;
+
+                for(int tap : PARITY_TAPS)
+                {
+                    if(x + tap < DATA_LENGTH)
+                    {
+                        syndrome[x + tap] = !syndrome[x + tap];
+                    }
+                }
+            }
+        }
+
+        if(corrected > 0 && crcPasses(data))
+        {
+            for(int x = 0; x < DATA_LENGTH; x++)
+            {
+                if(data[x])
+                {
+                    message.set(offset + x);
+                }
+                else
+                {
+                    message.clear(offset + x);
+                }
+            }
+
+            message.setCorrectedBitCount(message.getCorrectedBitCount() + corrected);
+            return true;
+        }
+
+        return false;
+    }
+
+    /**
+     * Indicates if the CRC (data bytes 4 and 5) matches the CRC calculated over data bytes 0 - 3.
+     */
+    private static boolean crcPasses(boolean[] data)
+    {
+        int crc = 0;
+
+        //Reflected CRC-16/CCITT: bits are processed in transmitted (LSB first) order
+        for(int x = 0; x < 32; x++)
+        {
+            boolean feedback = ((crc & 1) == 1) ^ data[x];
+            crc >>>= 1;
+
+            if(feedback)
+            {
+                crc ^= 0x8408;
+            }
+        }
+
+        crc ^= 0xFFFF;
+
+        int received = 0;
+
+        for(int x = 0; x < 16; x++)
+        {
+            if(data[32 + x])
+            {
+                received |= (1 << x);
+            }
+        }
+
+        return crc == received;
     }
 
     public PacketType getPacketType()
@@ -200,7 +356,7 @@ public class MDCMessage extends Message
     {
         StringBuilder sb = new StringBuilder();
 
-        sb.append("MDC1200 UNIT:").append(getFromIdentifier());
+        sb.append("MDC1200 UNIT:").append(String.format("%04X", getFromIdentifier().getValue()));
         if(isEmergency())
         {
             sb.append(" **EMERGENCY**");

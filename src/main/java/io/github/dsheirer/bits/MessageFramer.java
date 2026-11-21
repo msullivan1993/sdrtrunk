@@ -53,6 +53,20 @@ public class MessageFramer implements IBinarySymbolProcessor, Listener<Boolean>,
         mMessageLength = messageLength;
     }
 
+    /**
+     * Constructs a message framer that tolerates bit errors in the sync pattern.  Use this only when the messages
+     * carry error detection (e.g. a CRC) so that false sync detections are rejected downstream.
+     * @param syncPattern to detect
+     * @param messageLength of the message, including the sync pattern
+     * @param syncBitErrors maximum number of bit errors allowed in a sync pattern match
+     */
+    public MessageFramer(boolean[] syncPattern, int messageLength, int syncBitErrors)
+    {
+        mSyncPattern = syncPattern;
+        mMatcher = new SyncPatternMatcher(syncPattern, syncBitErrors);
+        mMessageLength = messageLength;
+    }
+
     public void reset()
     {
         for(MessageAssembler assembler : mMessageAssemblers)
