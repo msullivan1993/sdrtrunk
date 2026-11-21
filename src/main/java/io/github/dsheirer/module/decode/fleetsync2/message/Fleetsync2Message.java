@@ -117,7 +117,9 @@ public abstract class Fleetsync2Message extends Message
      */
     public FleetsyncRadioIdentifier getFromRadioIdentifier()
     {
-        return FleetsyncRadioIdentifier.createFrom(getMessage().getInt(FLEET) + 99, getFromIdent());
+        boolean emergency = getMessageType() == FleetsyncMessageType.EMERGENCY ||
+            getMessageType() == FleetsyncMessageType.LONE_WORKER_EMERGENCY;
+        return FleetsyncRadioIdentifier.createFrom(getMessage().getInt(FLEET) + 99, getFromIdent(), emergency);
     }
 
     /**

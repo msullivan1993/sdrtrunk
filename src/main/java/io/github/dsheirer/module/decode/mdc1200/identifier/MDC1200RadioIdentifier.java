@@ -19,6 +19,7 @@
 package io.github.dsheirer.module.decode.mdc1200.identifier;
 
 import io.github.dsheirer.identifier.Role;
+import io.github.dsheirer.identifier.radio.ISignallingRadioIdentifier;
 import io.github.dsheirer.identifier.radio.RadioIdentifier;
 import io.github.dsheirer.protocol.Protocol;
 
@@ -31,8 +32,10 @@ import io.github.dsheirer.protocol.Protocol;
  * as the decimal number with the same digits (hex 0x1234 is reported as 1234).  IDs that contain the hex digits A-F
  * can't be written that way, and are reported as their numeric value.
  */
-public class MDC1200RadioIdentifier extends RadioIdentifier
+public class MDC1200RadioIdentifier extends RadioIdentifier implements ISignallingRadioIdentifier
 {
+    private boolean mEmergency = false;
+
     /**
      * Constructs an instance
      * @param value of the unit ID
@@ -41,6 +44,24 @@ public class MDC1200RadioIdentifier extends RadioIdentifier
     public MDC1200RadioIdentifier(Integer value, Role role)
     {
         super(value, role);
+    }
+
+    /**
+     * Constructs an instance
+     * @param value of the unit ID
+     * @param role of the identifier
+     * @param emergency true if the unit was identified by an emergency message
+     */
+    public MDC1200RadioIdentifier(Integer value, Role role, boolean emergency)
+    {
+        super(value, role);
+        mEmergency = emergency;
+    }
+
+    @Override
+    public boolean isEmergency()
+    {
+        return mEmergency;
     }
 
     @Override
@@ -82,5 +103,15 @@ public class MDC1200RadioIdentifier extends RadioIdentifier
     public static MDC1200RadioIdentifier createFrom(int value)
     {
         return new MDC1200RadioIdentifier(value, Role.FROM);
+    }
+
+    /**
+     * Creates a FROM (calling radio) identifier.
+     * @param value of the unit ID
+     * @param emergency true if the unit was identified by an emergency message
+     */
+    public static MDC1200RadioIdentifier createFrom(int value, boolean emergency)
+    {
+        return new MDC1200RadioIdentifier(value, Role.FROM, emergency);
     }
 }
