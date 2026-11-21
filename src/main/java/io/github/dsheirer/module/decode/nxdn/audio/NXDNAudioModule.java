@@ -38,6 +38,7 @@ import io.github.dsheirer.preference.UserPreferences;
 import io.github.dsheirer.sample.Listener;
 import java.util.ArrayList;
 import java.util.List;
+import jmbe.frame.CorrectedAMBEFrame;
 
 /**
  * NXDN AMBE audio module
@@ -168,9 +169,14 @@ public class NXDNAudioModule extends AmbeAudioModule
     {
         if(!mEncryptedCall && mAudioCodec != null && mAudioCodec.equals(AudioCodec.HALF_RATE)) //Full rate not yet supported
         {
-            for(byte[] frame : audio.getAudioFrames())
+            List<byte[]> frames = audio.getAudioFrames();
+
+            //Only error correct the frames in sdrtrunk when the JMBE library (version 3+) can synthesize from them
+            List<CorrectedAMBEFrame> correctedFrames = isCorrectedFrameSupported() ? audio.getCorrectedAudioFrames() : null;
+
+            for(int x = 0; x < frames.size(); x++)
             {
-                addAudio(getAudioCodec().getAudio(frame));
+                addAudio(getAudio(frames.get(x), correctedFrames != null ? correctedFrames.get(x) : null));
             }
         }
         else
