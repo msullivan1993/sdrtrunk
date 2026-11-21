@@ -19,6 +19,7 @@
 package io.github.dsheirer.module.decode.fleetsync2.identifier;
 
 import io.github.dsheirer.identifier.Role;
+import io.github.dsheirer.identifier.radio.ISignallingRadioIdentifier;
 import io.github.dsheirer.identifier.radio.RadioIdentifier;
 import io.github.dsheirer.protocol.Protocol;
 
@@ -31,8 +32,10 @@ import io.github.dsheirer.protocol.Protocol;
  * displayed as 100-1234.  Fleets are 100-354 and idents are 1000-5094 as transmitted, so the value is unique and
  * reads the same as the fleet and ident programmed in the radio.
  */
-public class FleetsyncRadioIdentifier extends RadioIdentifier
+public class FleetsyncRadioIdentifier extends RadioIdentifier implements ISignallingRadioIdentifier
 {
+    private boolean mEmergency = false;
+
     private static final int FLEET_MULTIPLIER = 10000;
 
     /**
@@ -43,6 +46,24 @@ public class FleetsyncRadioIdentifier extends RadioIdentifier
     public FleetsyncRadioIdentifier(Integer value, Role role)
     {
         super(value, role);
+    }
+
+    /**
+     * Constructs an instance
+     * @param value of the unit ID
+     * @param role of the identifier
+     * @param emergency true if the unit was identified by an emergency message
+     */
+    public FleetsyncRadioIdentifier(Integer value, Role role, boolean emergency)
+    {
+        super(value, role);
+        mEmergency = emergency;
+    }
+
+    @Override
+    public boolean isEmergency()
+    {
+        return mEmergency;
     }
 
     @Override
@@ -83,6 +104,17 @@ public class FleetsyncRadioIdentifier extends RadioIdentifier
      */
     public static FleetsyncRadioIdentifier createFrom(int fleet, int ident)
     {
-        return new FleetsyncRadioIdentifier((fleet * FLEET_MULTIPLIER) + ident, Role.FROM);
+        return createFrom(fleet, ident, false);
+    }
+
+    /**
+     * Creates a FROM (calling radio) identifier.
+     * @param fleet number
+     * @param ident within the fleet
+     * @param emergency true if the unit was identified by an emergency message
+     */
+    public static FleetsyncRadioIdentifier createFrom(int fleet, int ident, boolean emergency)
+    {
+        return new FleetsyncRadioIdentifier((fleet * FLEET_MULTIPLIER) + ident, Role.FROM, emergency);
     }
 }

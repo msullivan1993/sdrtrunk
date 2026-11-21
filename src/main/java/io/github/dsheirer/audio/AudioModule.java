@@ -23,7 +23,9 @@ import io.github.dsheirer.audio.squelch.ISquelchStateListener;
 import io.github.dsheirer.audio.squelch.SquelchState;
 import io.github.dsheirer.audio.squelch.SquelchStateEvent;
 import io.github.dsheirer.dsp.filter.FilterFactory;
+import io.github.dsheirer.identifier.Identifier;
 import io.github.dsheirer.identifier.IdentifierUpdateNotification;
+import io.github.dsheirer.identifier.radio.ISignallingRadioIdentifier;
 import io.github.dsheirer.identifier.Role;
 import io.github.dsheirer.dsp.filter.design.FilterDesignException;
 import io.github.dsheirer.dsp.filter.fir.FIRFilterSpecification;
@@ -35,6 +37,7 @@ import io.github.dsheirer.util.ThreadPool;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -213,7 +216,14 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
     }
 
     /**
-     * Wraps the identifier update listener to track when calling radio (FROM) identifiers arrive.
+     * Wraps the identifier update listener to track when calling radio (FROM) identifiers arrive and to keep the
+     * first calling radio of a call.
+     *
+     * Analog signalling (MDC-1200, Fleetsync) can identify more than one unit during a call, e.g. when a unit replies
+     * before the repeater's squelch tail drops and both transmissions are in the same call.  The first calling radio
+     * identified during the call stays attached to the call, whether the agency uses pre-IDs or post-IDs, unless a
+     * later calling radio is an emergency, which replaces it.  Decoders remove the previous calling radio before they
+     * add a new one, so calling radio removes are dropped here and the replacement is handled when the add arrives.
      */
     @Override
     public Listener<IdentifierUpdateNotification> getIdentifierUpdateListener()
@@ -223,8 +233,37 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
             Listener<IdentifierUpdateNotification> listener = super.getIdentifierUpdateListener();
 
             mIdentifierUpdateListener = notification -> {
-                if((notification.isAdd() || notification.isSilentAdd()) &&
-                    notification.getIdentifier().getRole() == Role.FROM)
+                Identifier<?> identifier = notification.getIdentifier();
+
+                if(identifier instanceof ISignallingRadioIdentifier && identifier.getRole() == Role.FROM)
+                {
+                    if(notification.isRemove() || notification.isSilentRemove())
+                    {
+                        return;
+                    }
+
+                    List<Identifier> current = getCallingRadioIdentifiers();
+
+                    if(!current.isEmpty() && !current.contains(identifier))
+                    {
+                        if(isEmergency(identifier) && current.stream().noneMatch(AudioModule::isEmergency))
+                        {
+                            for(Identifier existing : current)
+                            {
+                                listener.receive(new IdentifierUpdateNotification(existing,
+                                    IdentifierUpdateNotification.Operation.REMOVE, notification.getTimeslot()));
+                            }
+                        }
+                        else
+                        {
+                            //Keep the first calling radio of the call
+                            return;
+                        }
+                    }
+
+                    mLastFromIdentifierNanos = System.nanoTime();
+                }
+                else if((notification.isAdd() || notification.isSilentAdd()) && identifier.getRole() == Role.FROM)
                 {
                     mLastFromIdentifierNanos = System.nanoTime();
                 }
@@ -234,6 +273,32 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
         }
 
         return mIdentifierUpdateListener;
+    }
+
+    /**
+     * Signalling calling radio (FROM) identifiers currently attached.
+     */
+    private List<Identifier> getCallingRadioIdentifiers()
+    {
+        List<Identifier> callingRadios = new ArrayList<>();
+
+        for(Identifier identifier : getIdentifierCollection().getIdentifiers(Role.FROM))
+        {
+            if(identifier instanceof ISignallingRadioIdentifier)
+            {
+                callingRadios.add(identifier);
+            }
+        }
+
+        return callingRadios;
+    }
+
+    /**
+     * Indicates if the identifier is a calling radio identified by an emergency message.
+     */
+    private static boolean isEmergency(Identifier<?> identifier)
+    {
+        return identifier instanceof ISignallingRadioIdentifier signalling && signalling.isEmergency();
     }
 
     /**

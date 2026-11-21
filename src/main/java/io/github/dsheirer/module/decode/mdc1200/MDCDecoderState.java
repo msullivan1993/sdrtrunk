@@ -73,14 +73,16 @@ public class MDCDecoderState extends DecoderState
 
             //Attach the unit ID of a PTT ID (pre or post) or emergency to the current call as the calling radio.  The
             //existing identifier is removed first so that a repeat of the same unit ID is broadcast again: the audio
-            //module clears stale calling radio identifiers between calls.
+            //module clears stale calling radio identifiers between calls, and keeps the first calling radio of a call
+            //unless a later one is an emergency.
             MDCMessageType messageType = mdc.getMessageType();
 
             if((messageType == MDCMessageType.ANI || messageType == MDCMessageType.EMERGENCY) &&
                 mdc.getFromIdentifier().getValue() > 0)
             {
                 getIdentifierCollection().remove(IdentifierClass.USER, Form.RADIO, Role.FROM);
-                getIdentifierCollection().update(MDC1200RadioIdentifier.createFrom(mdc.getFromIdentifier().getValue()));
+                getIdentifierCollection().update(MDC1200RadioIdentifier.createFrom(mdc.getFromIdentifier().getValue(),
+                    messageType == MDCMessageType.EMERGENCY || mdc.isEmergency()));
             }
 
             if(mdc.isEmergency())
