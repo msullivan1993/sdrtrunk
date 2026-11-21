@@ -33,6 +33,13 @@ public class MDCDecoder extends AbstractAFSKDecoder
 {
     private static final int MESSAGE_LENGTH = 304;
 
+    /**
+     * Bit errors allowed in the 40-bit sync pattern.  A single bit error in the sync otherwise discards a burst whose
+     * data is good.  The sync pattern's autocorrelation sidelobes are 14 or more bits, and messages are validated by
+     * CRC, so false detections are rejected.
+     */
+    private static final int SYNC_BIT_ERRORS = 3;
+
     private NRZDecoder mNRZDecoder;
     private MessageFramer mMessageFramer;
     private MDCMessageProcessor mMessageProcessor;
@@ -53,7 +60,7 @@ public class MDCDecoder extends AbstractAFSKDecoder
     {
         mNRZDecoder = new NRZDecoder(NRZDecoder.MODE_INVERTED);
         getDecoder().setSymbolProcessor(mNRZDecoder);
-        mMessageFramer = new MessageFramer(SyncPattern.MDC1200.getPattern(), MESSAGE_LENGTH);
+        mMessageFramer = new MessageFramer(SyncPattern.MDC1200.getPattern(), MESSAGE_LENGTH, SYNC_BIT_ERRORS);
         mNRZDecoder.setListener(mMessageFramer);
         mMessageProcessor = new MDCMessageProcessor();
         mMessageFramer.addMessageListener(mMessageProcessor);
