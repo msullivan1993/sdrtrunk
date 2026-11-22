@@ -34,7 +34,7 @@ import io.github.dsheirer.module.decode.nxdn.layer3.scch.Information1;
 import io.github.dsheirer.module.decode.nxdn.layer3.scch.InitializationVectorPart1;
 import io.github.dsheirer.module.decode.nxdn.layer3.type.AudioCodec;
 import io.github.dsheirer.module.decode.nxdn.layer3.type.CipherType;
-import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.settings.Settings;
 import io.github.dsheirer.sample.Listener;
 import java.util.ArrayList;
 import java.util.List;
@@ -54,12 +54,12 @@ public class NXDNAudioModule extends AmbeAudioModule
 
     /**
      * Constructs an instance
-     * @param userPreferences component
+     * @param settings component
      * @param aliasList for the current channel
      */
-    public NXDNAudioModule(UserPreferences userPreferences, AliasList aliasList)
+    public NXDNAudioModule(Settings settings, AliasList aliasList)
     {
-        super(userPreferences, aliasList, 0);
+        super(settings, aliasList, 0);
     }
 
     /**

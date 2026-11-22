@@ -38,7 +38,7 @@ import io.github.dsheirer.controller.channel.ChannelModel;
 import io.github.dsheirer.controller.channel.ChannelProcessingManager;
 import io.github.dsheirer.module.ProcessingChain;
 import io.github.dsheirer.module.decode.DecoderType;
-import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.settings.Settings;
 import io.github.dsheirer.preference.thinline.ThinlineRadioPreference;
 import io.github.dsheirer.properties.SystemProperties;
 import io.github.dsheirer.source.tuner.Tuner;
@@ -89,7 +89,7 @@ public class ThinlineRadioHealthReporter
         DecoderType.LTR_NET, DecoderType.MPT1327, DecoderType.NXDN, DecoderType.PASSPORT, DecoderType.P25_PHASE1,
         DecoderType.P25_PHASE2);
 
-    private final UserPreferences mUserPreferences;
+    private final Settings mUserPreferences;
     private final BroadcastModel mBroadcastModel;
     private final ChannelModel mChannelModel;
     private final ChannelProcessingManager mChannelProcessingManager;
@@ -112,7 +112,7 @@ public class ThinlineRadioHealthReporter
     private String mLastSignature = "";
     private boolean mSiteReporting;
 
-    public ThinlineRadioHealthReporter(UserPreferences userPreferences, BroadcastModel broadcastModel,
+    public ThinlineRadioHealthReporter(Settings userPreferences, BroadcastModel broadcastModel,
                                        ChannelModel channelModel, ChannelProcessingManager channelProcessingManager,
                                        TunerManager tunerManager, AliasModel aliasModel, ChannelMapModel channelMapModel,
                                        Supplier<Stage> stage)

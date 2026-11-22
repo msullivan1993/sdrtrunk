@@ -45,8 +45,8 @@ import io.github.dsheirer.audio.broadcast.BroadcastFactory;
 import io.github.dsheirer.audio.broadcast.BroadcastFormat;
 import io.github.dsheirer.audio.broadcast.BroadcastModel;
 import io.github.dsheirer.audio.broadcast.BroadcastServerType;
-import io.github.dsheirer.preference.Preference;
-import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.settings.AbstractSettings;
+import io.github.dsheirer.settings.Settings;
 import io.github.dsheirer.preference.thinline.ThinlineRadioPreference;
 import io.github.dsheirer.source.tuner.channel.TunerChannel;
 import io.github.dsheirer.source.tuner.configuration.TunerConfiguration;
@@ -86,7 +86,7 @@ class ThinlineRadioControl
     private final Consumer<ObjectNode> mSender;
     private final Supplier<List<ConfiguredBroadcast>> mBroadcasts;
     private final ThinlineRadioPlaylist mPlaylist;
-    private final UserPreferences mUserPreferences;
+    private final Settings mUserPreferences;
     private final BroadcastModel mBroadcastModel;
     private final Supplier<ObjectNode> mPermissions;
 
@@ -99,7 +99,7 @@ class ThinlineRadioControl
 
     record Result(boolean ok, String error) {}
 
-    ThinlineRadioControl(UserPreferences userPreferences, BroadcastModel broadcastModel, ChannelModel channelModel,
+    ThinlineRadioControl(Settings userPreferences, BroadcastModel broadcastModel, ChannelModel channelModel,
                          ChannelProcessingManager channelProcessingManager, TunerManager tunerManager,
                          AliasModel aliasModel, ChannelMapModel channelMapModel, Consumer<ObjectNode> sender,
                          Supplier<List<ConfiguredBroadcast>> broadcasts, Supplier<ObjectNode> permissions)
@@ -677,7 +677,7 @@ class ThinlineRadioControl
         body.put("type", "settings");
         body.put("scope", "preferences");
         ArrayNode sections = body.putArray("sections");
-        for(Map.Entry<String, Preference> entry: preferenceSections().entrySet())
+        for(Map.Entry<String, AbstractSettings> entry: preferenceSections().entrySet())
         {
             try
             {
@@ -688,7 +688,7 @@ class ThinlineRadioControl
                 }
                 ObjectNode section = sections.addObject();
                 section.put("id", entry.getKey());
-                section.put("title", ThinlineRadioSettings.label(entry.getKey().replace("Preference", "")));
+                section.put("title", ThinlineRadioSettings.label(entry.getKey().replace("Settings", "").replace("Preference", "")));
                 section.set("fields", fields);
             }
             catch(Exception e)
@@ -702,7 +702,7 @@ class ThinlineRadioControl
 
     private Result savePreferences(String section, JsonNode values)
     {
-        Preference preference = preferenceSections().get(section);
+        AbstractSettings preference = preferenceSections().get(section);
         if(preference == null)
         {
             return new Result(false, "Preference section not found");
@@ -726,18 +726,18 @@ class ThinlineRadioControl
      * Preference pages the admin page may edit, keyed by class name.  Thinline Radio's own page (URL, key, and
      * remote permissions) and window layout are left out.
      */
-    private Map<String, Preference> preferenceSections()
+    private Map<String, AbstractSettings> preferenceSections()
     {
-        Map<String, Preference> sections = new LinkedHashMap<>();
-        for(Method method: UserPreferences.class.getMethods())
+        Map<String, AbstractSettings> sections = new LinkedHashMap<>();
+        for(Method method: Settings.class.getMethods())
         {
-            if(method.getParameterCount() != 0 || !Preference.class.isAssignableFrom(method.getReturnType()))
+            if(method.getParameterCount() != 0 || !AbstractSettings.class.isAssignableFrom(method.getReturnType()))
             {
                 continue;
             }
             try
             {
-                Preference preference = (Preference)method.invoke(mUserPreferences);
+                AbstractSettings preference = (AbstractSettings)method.invoke(mUserPreferences);
                 if(preference == null || preference instanceof ThinlineRadioPreference)
                 {
                     continue;

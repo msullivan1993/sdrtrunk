@@ -20,7 +20,7 @@
 package io.github.dsheirer.gui.preference.thinline;
 
 import io.github.dsheirer.audio.broadcast.thinline.ThinlineRadioSocket;
-import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.settings.Settings;
 import io.github.dsheirer.preference.thinline.ThinlineRadioPreference;
 import io.github.dsheirer.util.ThreadPool;
 import java.util.function.Consumer;
@@ -48,7 +48,7 @@ public class ThinlineRadioPreferenceEditor extends HBox
     private final ThinlineRadioPreference mPreference;
     private GridPane mEditorPane;
 
-    public ThinlineRadioPreferenceEditor(UserPreferences userPreferences)
+    public ThinlineRadioPreferenceEditor(Settings userPreferences)
     {
         mPreference = userPreferences.getThinlineRadioPreference();
         setMaxWidth(Double.MAX_VALUE);

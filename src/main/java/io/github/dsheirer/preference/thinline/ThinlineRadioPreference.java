@@ -19,8 +19,8 @@
 
 package io.github.dsheirer.preference.thinline;
 
-import io.github.dsheirer.preference.Preference;
-import io.github.dsheirer.preference.PreferenceType;
+import io.github.dsheirer.settings.AbstractSettings;
+import io.github.dsheirer.settings.SettingsType;
 import io.github.dsheirer.sample.Listener;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
@@ -31,7 +31,7 @@ import java.util.prefs.Preferences;
 /**
  * Site-wide Thinline Radio health reporting. Call-upload streams keep their own API keys.
  */
-public class ThinlineRadioPreference extends Preference
+public class ThinlineRadioPreference extends AbstractSettings
 {
     private static final String ENABLED = "thinline.health.enabled";
     private static final String URL = "thinline.health.url";
@@ -79,7 +79,7 @@ public class ThinlineRadioPreference extends Preference
 
     private final Preferences mPreferences = Preferences.userNodeForPackage(ThinlineRadioPreference.class);
 
-    public ThinlineRadioPreference(Listener<PreferenceType> updateListener)
+    public ThinlineRadioPreference(Listener<SettingsType> updateListener)
     {
         super(updateListener);
         keepEarlierRemoteDefaults(mPreferences);
@@ -112,9 +112,9 @@ public class ThinlineRadioPreference extends Preference
     }
 
     @Override
-    public PreferenceType getPreferenceType()
+    public SettingsType getSettingsType()
     {
-        return PreferenceType.THINLINE_RADIO;
+        return SettingsType.THINLINE_RADIO;
     }
 
     public boolean isEnabled()
@@ -125,7 +125,7 @@ public class ThinlineRadioPreference extends Preference
     public void setEnabled(boolean enabled)
     {
         mPreferences.putBoolean(ENABLED, enabled);
-        notifyPreferenceUpdated();
+        notifySettingsUpdated();
     }
 
     public String getUrl()
@@ -136,7 +136,7 @@ public class ThinlineRadioPreference extends Preference
     public void setUrl(String url)
     {
         mPreferences.put(URL, url == null ? "" : url.trim());
-        notifyPreferenceUpdated();
+        notifySettingsUpdated();
     }
 
     public String getApiKey()
@@ -147,7 +147,7 @@ public class ThinlineRadioPreference extends Preference
     public void setApiKey(String apiKey)
     {
         mPreferences.put(API_KEY, apiKey == null ? "" : apiKey.trim());
-        notifyPreferenceUpdated();
+        notifySettingsUpdated();
     }
 
     public boolean isAlertTuner()
@@ -158,7 +158,7 @@ public class ThinlineRadioPreference extends Preference
     public void setAlertTuner(boolean alert)
     {
         mPreferences.putBoolean(ALERT_TUNER, alert);
-        notifyPreferenceUpdated();
+        notifySettingsUpdated();
     }
 
     public boolean isAlertControl()
@@ -169,7 +169,7 @@ public class ThinlineRadioPreference extends Preference
     public void setAlertControl(boolean alert)
     {
         mPreferences.putBoolean(ALERT_CONTROL, alert);
-        notifyPreferenceUpdated();
+        notifySettingsUpdated();
     }
 
     public boolean isAlertUploader()
@@ -180,7 +180,7 @@ public class ThinlineRadioPreference extends Preference
     public void setAlertUploader(boolean alert)
     {
         mPreferences.putBoolean(ALERT_UPLOADER, alert);
-        notifyPreferenceUpdated();
+        notifySettingsUpdated();
     }
 
     public boolean isAlertOverflow()
@@ -191,7 +191,7 @@ public class ThinlineRadioPreference extends Preference
     public void setAlertOverflow(boolean alert)
     {
         mPreferences.putBoolean(ALERT_OVERFLOW, alert);
-        notifyPreferenceUpdated();
+        notifySettingsUpdated();
     }
 
     public boolean isAlertOffline()
@@ -202,7 +202,7 @@ public class ThinlineRadioPreference extends Preference
     public void setAlertOffline(boolean alert)
     {
         mPreferences.putBoolean(ALERT_OFFLINE, alert);
-        notifyPreferenceUpdated();
+        notifySettingsUpdated();
     }
 
     public boolean isRemoteAllowed(Remote remote)
@@ -218,7 +218,7 @@ public class ThinlineRadioPreference extends Preference
     public void setRemoteAllowed(Remote remote, boolean allowed)
     {
         mPreferences.putBoolean(REMOTE + remote.key(), allowed);
-        notifyPreferenceUpdated();
+        notifySettingsUpdated();
     }
 
     /**

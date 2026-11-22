@@ -148,11 +148,11 @@ public class RdioScannerEditor extends AbstractBroadcastEditor<RdioScannerConfig
      */
     static boolean siteKeyReady(PlaylistManager playlistManager)
     {
-        if(playlistManager == null || playlistManager.getUserPreferences() == null)
+        if(playlistManager == null || playlistManager.getSettings() == null)
         {
             return false;
         }
-        String key = playlistManager.getUserPreferences().getThinlineRadioPreference().getApiKey();
+        String key = playlistManager.getSettings().getThinlineRadioPreference().getApiKey();
         return key != null && !key.isBlank();
     }
 

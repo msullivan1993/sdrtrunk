@@ -94,11 +94,11 @@ public class ThinlineRadioSettingsTest
     @Test
     public void preferencePagesDescribe() throws Exception
     {
-        io.github.dsheirer.preference.UserPreferences preferences = new io.github.dsheirer.preference.UserPreferences();
+        io.github.dsheirer.settings.Settings preferences = new io.github.dsheirer.settings.Settings();
         for(java.lang.reflect.Method method: preferences.getClass().getMethods())
         {
             if(method.getParameterCount() == 0 &&
-                io.github.dsheirer.preference.Preference.class.isAssignableFrom(method.getReturnType()))
+                io.github.dsheirer.settings.AbstractSettings.class.isAssignableFrom(method.getReturnType()))
             {
                 Object preference = method.invoke(preferences);
                 ArrayNode fields = ThinlineRadioSettings.describe(preference, Set.of(), Set.of("password"), true);

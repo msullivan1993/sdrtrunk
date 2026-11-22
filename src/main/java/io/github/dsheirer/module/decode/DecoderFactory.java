@@ -113,7 +113,7 @@ import io.github.dsheirer.module.decode.tait.Tait1200DecoderState;
 import io.github.dsheirer.module.decode.tait.Tait1200MessageFilter;
 import io.github.dsheirer.module.decode.traffic.TrafficChannelManager;
 import io.github.dsheirer.module.demodulate.fm.FMDemodulatorModule;
-import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.settings.Settings;
 import io.github.dsheirer.source.SourceType;
 import io.github.dsheirer.source.config.SourceConfigTunerMultipleFrequency;
 import io.github.dsheirer.source.tuner.channel.rotation.ChannelRotationMonitor;
@@ -140,10 +140,10 @@ public class DecoderFactory
      * @return list of configured decoders
      */
     public static List<Module> getModules(ChannelMapModel channelMapModel, Channel channel, AliasModel aliasModel,
-                                          UserPreferences userPreferences, TrafficChannelManager trafficChannelManager,
+                                          Settings settings, TrafficChannelManager trafficChannelManager,
                                           IChannelDescriptor channelDescriptor)
     {
-        List<Module> modules = getPrimaryModules(channelMapModel, channel, aliasModel, userPreferences,
+        List<Module> modules = getPrimaryModules(channelMapModel, channel, aliasModel, settings,
                 trafficChannelManager, channelDescriptor);
         modules.addAll(getAuxiliaryDecoders(channel.getAuxDecodeConfiguration()));
         return modules;
@@ -155,13 +155,13 @@ public class DecoderFactory
      * @param channelMapModel for channel map lookups
      * @param channel configuration
      * @param aliasModel for alias lookups
-     * @param userPreferences instance
+     * @param settings instance
      * @param trafficChannelManager optional traffic channel manager to use
      * @param channelDescriptor to preload into the decoder state as the current channel.
      * @return list of modules to use for a processing chain
      */
     public static List<Module> getPrimaryModules(ChannelMapModel channelMapModel, Channel channel, AliasModel aliasModel,
-                                                 UserPreferences userPreferences, TrafficChannelManager trafficChannelManager,
+                                                 Settings settings, TrafficChannelManager trafficChannelManager,
                                                  IChannelDescriptor channelDescriptor)
     {
         List<Module> modules = new ArrayList<>();
@@ -180,7 +180,7 @@ public class DecoderFactory
                 processAM(channel, modules, aliasList, decodeConfig);
                 break;
             case DMR:
-                processDMR(channel, userPreferences, modules, aliasList, (DecodeConfigDMR)decodeConfig,
+                processDMR(channel, settings, modules, aliasList, (DecodeConfigDMR)decodeConfig,
                     trafficChannelManager, channelDescriptor);
                 break;
             case LTR:
@@ -191,22 +191,22 @@ public class DecoderFactory
                 break;
             case MPT1327:
                 processMPT1327(channelMapModel, channel, modules, aliasList, channelType,
-                        (DecodeConfigMPT1327) decodeConfig, userPreferences);
+                        (DecodeConfigMPT1327) decodeConfig);
                 break;
             case NBFM:
                 processNBFM(channel, modules, aliasList, decodeConfig);
                 break;
             case NXDN:
-                processNXDN(channel, userPreferences, modules, aliasList, decodeConfig, trafficChannelManager, channelDescriptor);
+                processNXDN(channel, settings, modules, aliasList, decodeConfig, trafficChannelManager, channelDescriptor);
                 break;
             case PASSPORT:
                 processPassport(channel, modules, aliasList, decodeConfig);
                 break;
             case P25_PHASE1:
-                processP25Phase1(channel, userPreferences, modules, aliasList, trafficChannelManager, channelDescriptor);
+                processP25Phase1(channel, settings, modules, aliasList, trafficChannelManager, channelDescriptor);
                 break;
             case P25_PHASE2:
-                processP25Phase2(channel, userPreferences, modules, aliasList, trafficChannelManager, channelDescriptor);
+                processP25Phase2(channel, settings, modules, aliasList, trafficChannelManager, channelDescriptor);
                 break;
             default:
                 throw new IllegalArgumentException("Unknown decoder type [" + decodeConfig.getDecoderType().toString() + "]");
@@ -246,13 +246,13 @@ public class DecoderFactory
     /**
      * Creates decoder modules for APCO-25 Phase 2 decoder
      * @param channel configuration
-     * @param userPreferences reference
+     * @param settings reference
      * @param modules collection to add to
      * @param aliasList for the channel
      * @param trafficChannelManager from parent, if this is for a traffic channel, otherwise this can be null and it
      * will be created automatically.
      */
-    private static void processP25Phase2(Channel channel, UserPreferences userPreferences, List<Module> modules,
+    private static void processP25Phase2(Channel channel, Settings settings, List<Module> modules,
                                          AliasList aliasList, TrafficChannelManager trafficChannelManager,
                                          IChannelDescriptor channelDescriptor)
     {
@@ -292,8 +292,8 @@ public class DecoderFactory
 
         if(channel.getDecodeConfiguration() instanceof  DecodeConfigP25Phase2 configP25P2)
         {
-            P25P2AudioModule audioModule1 = new P25P2AudioModule(userPreferences, P25P2Message.TIMESLOT_1, aliasList);
-            P25P2AudioModule audioModule2 = new P25P2AudioModule(userPreferences, P25P2Message.TIMESLOT_2, aliasList);
+            P25P2AudioModule audioModule1 = new P25P2AudioModule(settings, P25P2Message.TIMESLOT_1, aliasList);
+            P25P2AudioModule audioModule2 = new P25P2AudioModule(settings, P25P2Message.TIMESLOT_2, aliasList);
             configureJMBEAudioModule(audioModule1, configP25P2);
             configureJMBEAudioModule(audioModule2, configP25P2);
             modules.add(audioModule1);
@@ -306,18 +306,18 @@ public class DecoderFactory
         {
             List<State> activeStates = new ArrayList<>();
             activeStates.add(State.CONTROL);
-            modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay(), userPreferences));
+            modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay()));
         }
     }
 
     /**
      * Creates decoder modules for APCO-25 Phase 1 decoder
      * @param channel configuration
-     * @param userPreferences reference
+     * @param settings reference
      * @param modules collection to add to
      * @param aliasList for the channel
      */
-    private static void processP25Phase1(Channel channel, UserPreferences userPreferences, List<Module> modules,
+    private static void processP25Phase1(Channel channel, Settings settings, List<Module> modules,
                                          AliasList aliasList, TrafficChannelManager trafficChannelManager,
                                          IChannelDescriptor channelDescriptor)
     {
@@ -352,7 +352,7 @@ public class DecoderFactory
                 mLog.warn("Expected non-null traffic channel manager for channel " + channel.getName());
             }
 
-            P25P1AudioModule audioModule = new P25P1AudioModule(userPreferences, aliasList);
+            P25P1AudioModule audioModule = new P25P1AudioModule(settings, aliasList);
             configureJMBEAudioModule(audioModule, configP25P1);
             audioModule.setNacFilter(configP25P1.getNacFilter());
             modules.add(audioModule);
@@ -363,7 +363,7 @@ public class DecoderFactory
             {
                 List<State> activeStates = new ArrayList<>();
                 activeStates.add(State.CONTROL);
-                modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay(), userPreferences));
+                modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay()));
             }
         }
     }
@@ -397,8 +397,7 @@ public class DecoderFactory
      * @param decodeConfig configuration
      */
     private static void processMPT1327(ChannelMapModel channelMapModel, Channel channel, List<Module> modules,
-                                       AliasList aliasList, ChannelType channelType, DecodeConfigMPT1327 decodeConfig,
-                                       UserPreferences userPreferences)
+                                       AliasList aliasList, ChannelType channelType, DecodeConfigMPT1327 decodeConfig)
     {
         DecodeConfigMPT1327 mptConfig = decodeConfig;
         ChannelMap channelMap = channelMapModel.getChannelMap(mptConfig.getChannelMapName());
@@ -437,7 +436,7 @@ public class DecoderFactory
         {
             List<State> activeStates = new ArrayList<>();
             activeStates.add(State.CONTROL);
-            modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay(), userPreferences));
+            modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay()));
         }
     }
 
@@ -560,7 +559,7 @@ public class DecoderFactory
      * @param aliasList for aliases.
      * @param decodeConfig with details
      */
-    private static void processNXDN(Channel channel, UserPreferences userPreferences, List<Module> modules,
+    private static void processNXDN(Channel channel, Settings settings, List<Module> modules,
                                     AliasList aliasList, DecodeConfiguration decodeConfig,
                                     TrafficChannelManager trafficChannelManager, IChannelDescriptor channelDescriptor)
     {
@@ -572,12 +571,12 @@ public class DecoderFactory
             {
                 List<State> activeStates = new ArrayList<>();
                 activeStates.add(State.CONTROL);
-                modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay(), userPreferences));
+                modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay()));
             }
 
             modules.add(new NXDNDecoder(configNXDN));
 
-            NXDNAudioModule audioModule = new NXDNAudioModule(userPreferences, aliasList);
+            NXDNAudioModule audioModule = new NXDNAudioModule(settings, aliasList);
             configureJMBEAudioModule(audioModule, configNXDN);
             audioModule.setRanFilter(configNXDN.getRanFilter());
             modules.add(audioModule);
@@ -643,14 +642,14 @@ public class DecoderFactory
      * changes) and so we reuse the traffic channel manager from the converted channel.
      *
      * @param channel for the DMR decoder
-     * @param userPreferences for access to JMBE audio library
+     * @param settings for access to JMBE audio library
      * @param modules list to add to
      * @param aliasList for the audio module
      * @param decodeConfig for the DMR configuration
      * @param trafficChannelManager optional traffic channel manager to re-use
      * @param channelDescriptor for the channel.
      */
-    private static void processDMR(Channel channel, UserPreferences userPreferences, List<Module> modules,
+    private static void processDMR(Channel channel, Settings settings, List<Module> modules,
                                    AliasList aliasList, DecodeConfigDMR decodeConfig,
                                    TrafficChannelManager trafficChannelManager, IChannelDescriptor channelDescriptor)
     {
@@ -729,8 +728,8 @@ public class DecoderFactory
         modules.add(state1);
         modules.add(state2);
 
-        DMRAudioModule audioModule1 = new DMRAudioModule(userPreferences, aliasList, DMRMessage.TIMESLOT_1);
-        DMRAudioModule audioModule2 = new DMRAudioModule(userPreferences, aliasList, DMRMessage.TIMESLOT_2);
+        DMRAudioModule audioModule1 = new DMRAudioModule(settings, aliasList, DMRMessage.TIMESLOT_1);
+        DMRAudioModule audioModule2 = new DMRAudioModule(settings, aliasList, DMRMessage.TIMESLOT_2);
         configureJMBEAudioModule(audioModule1, decodeConfig);
         configureJMBEAudioModule(audioModule2, decodeConfig);
         audioModule1.setColorCodeFilter(decodeConfig.getColorCodeFilter());
@@ -744,7 +743,7 @@ public class DecoderFactory
         {
             List<State> activeStates = new ArrayList<>();
             activeStates.add(State.CONTROL);
-            modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay(), userPreferences));
+            modules.add(new ChannelRotationMonitor(activeStates, sctmf.getFrequencyRotationDelay()));
         }
     }
 

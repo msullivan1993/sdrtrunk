@@ -29,10 +29,10 @@ import io.github.dsheirer.controller.channel.ChannelAutoStartWindow;
 import io.github.dsheirer.controller.channel.ChannelException;
 import io.github.dsheirer.controller.channel.ChannelSelectionManager;
 import io.github.dsheirer.eventbus.MyEventBus;
-import io.github.dsheirer.gui.preference.CalibrateRequest;
-import io.github.dsheirer.gui.preference.PreferenceEditorType;
-import io.github.dsheirer.gui.preference.ViewUserPreferenceEditorRequest;
-import io.github.dsheirer.gui.preference.calibration.CalibrationDialog;
+import io.github.dsheirer.gui.settings.CalibrateRequest;
+import io.github.dsheirer.gui.settings.SettingsPageType;
+import io.github.dsheirer.gui.settings.ViewSettingsEditorRequest;
+import io.github.dsheirer.gui.settings.calibration.CalibrationDialog;
 import io.github.dsheirer.gui.theme.ThemeManager;
 import io.github.dsheirer.icon.IconModel;
 import io.github.dsheirer.log.ApplicationLog;
@@ -41,12 +41,10 @@ import io.github.dsheirer.module.log.EventLogManager;
 import io.github.dsheirer.monitor.DiagnosticMonitor;
 import io.github.dsheirer.monitor.ResourceMonitor;
 import io.github.dsheirer.playlist.PlaylistManager;
-import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.settings.Settings;
 import io.github.dsheirer.properties.SystemProperties;
 import io.github.dsheirer.record.AudioRecordingManager;
 import io.github.dsheirer.sample.Listener;
-import io.github.dsheirer.settings.MapViewSetting;
-import io.github.dsheirer.settings.SettingsManager;
 import io.github.dsheirer.source.tuner.Tuner;
 import io.github.dsheirer.source.tuner.TunerEvent;
 import io.github.dsheirer.source.tuner.manager.TunerManager;
@@ -79,10 +77,9 @@ public class SDRTrunk implements Listener<TunerEvent>
     private DiagnosticMonitor mDiagnosticMonitor;
     private IconModel mIconModel = new IconModel();
     private PlaylistManager mPlaylistManager;
-    private SettingsManager mSettingsManager;
     private volatile MainWindow mMainWindow;
     private WindowManager mWindowManager;
-    private UserPreferences mUserPreferences = new UserPreferences();
+    private Settings mSettings = new Settings();
     private TunerManager mTunerManager;
     private ApplicationLog mApplicationLog;
     private ResourceMonitor mResourceMonitor;
@@ -108,10 +105,10 @@ public class SDRTrunk implements Listener<TunerEvent>
         {
             //Initialize the theme manager before any windows are created so that the chosen theme applies to the
             //first window.
-            ThemeManager.getInstance().initialize(mUserPreferences);
+            ThemeManager.getInstance().initialize(mSettings);
         }
 
-        mApplicationLog = new ApplicationLog(mUserPreferences);
+        mApplicationLog = new ApplicationLog(mSettings);
         mApplicationLog.start();
 
         Map<String,List<String>> duplicateLibraries = DuplicateLibraryDetector.findDuplicates();
@@ -125,7 +122,7 @@ public class SDRTrunk implements Listener<TunerEvent>
                     DuplicateLibraryDetector.describe(duplicateLibraries));
         }
 
-        mResourceMonitor = new ResourceMonitor(mUserPreferences);
+        mResourceMonitor = new ResourceMonitor(mSettings);
 
         ThreadPool.logSettings();
 
@@ -136,57 +133,46 @@ public class SDRTrunk implements Listener<TunerEvent>
         SystemProperties.getInstance().logCurrentSettings();
 
 
-        mTunerManager = new TunerManager(mUserPreferences);
+        mTunerManager = new TunerManager(mSettings);
         mTunerManager.start();
 
-        mSettingsManager = new SettingsManager();
-
-        //Older versions stored the map view in the settings file.  Move it to the map preferences once.
-        MapViewSetting legacyMapView = mSettingsManager.getLegacyMapView();
-
-        if(legacyMapView != null)
-        {
-            mUserPreferences.getMapPreference().migrateLegacyView(legacyMapView.getLatitude(),
-                legacyMapView.getLongitude(), legacyMapView.getZoom());
-        }
-
         AliasModel aliasModel = new AliasModel();
-        EventLogManager eventLogManager = new EventLogManager(aliasModel, mUserPreferences);
-        mPlaylistManager = new PlaylistManager(mUserPreferences, mTunerManager, aliasModel, eventLogManager, mIconModel);
+        EventLogManager eventLogManager = new EventLogManager(aliasModel, mSettings);
+        mPlaylistManager = new PlaylistManager(mSettings, mTunerManager, aliasModel, eventLogManager, mIconModel);
 
         boolean headless = GraphicsEnvironment.isHeadless();
 
-        mDiagnosticMonitor = new DiagnosticMonitor(mUserPreferences, mPlaylistManager.getChannelProcessingManager(),
+        mDiagnosticMonitor = new DiagnosticMonitor(mSettings, mPlaylistManager.getChannelProcessingManager(),
                 mTunerManager, headless);
         mDiagnosticMonitor.start();
 
         if(!headless)
         {
-            mWindowManager = new WindowManager(mUserPreferences, mTunerManager, mPlaylistManager);
+            mWindowManager = new WindowManager(mSettings, mTunerManager, mPlaylistManager);
         }
 
-        CalibrationManager calibrationManager = CalibrationManager.getInstance(mUserPreferences);
+        CalibrationManager calibrationManager = CalibrationManager.getInstance(mSettings);
         final boolean calibrating = !calibrationManager.isCalibrated() &&
-            !mUserPreferences.getVectorCalibrationPreference().isHideCalibrationDialog();
+            !mSettings.getVectorCalibrationSettings().isHideCalibrationDialog();
 
         new ChannelSelectionManager(mPlaylistManager.getChannelModel());
 
-        AudioPlaybackManager audioPlaybackManager = new AudioPlaybackManager(mUserPreferences);
+        AudioPlaybackManager audioPlaybackManager = new AudioPlaybackManager(mSettings);
 
-        mAudioRecordingManager = new AudioRecordingManager(mUserPreferences);
+        mAudioRecordingManager = new AudioRecordingManager(mSettings);
         mAudioRecordingManager.start();
 
         mAudioStreamingManager = new AudioStreamingManager(mPlaylistManager.getBroadcastModel(), BroadcastFormat.MP3,
-            mUserPreferences);
+            mSettings);
         mAudioStreamingManager.start();
 
-        mThinlineRadioHealthReporter = new ThinlineRadioHealthReporter(mUserPreferences,
+        mThinlineRadioHealthReporter = new ThinlineRadioHealthReporter(mSettings,
             mPlaylistManager.getBroadcastModel(), mPlaylistManager.getChannelModel(),
             mPlaylistManager.getChannelProcessingManager(), mTunerManager, mPlaylistManager.getAliasModel(),
             mPlaylistManager.getChannelMapModel(), () -> mMainWindow != null ? mMainWindow.getStage() : null);
         mThinlineRadioHealthReporter.start();
 
-        DuplicateCallDetector duplicateCallDetector = new DuplicateCallDetector(mUserPreferences);
+        DuplicateCallDetector duplicateCallDetector = new DuplicateCallDetector(mSettings);
 
         mPlaylistManager.getChannelProcessingManager().addAudioSegmentListener(duplicateCallDetector);
         mPlaylistManager.getChannelProcessingManager().addAudioSegmentListener(audioPlaybackManager);
@@ -199,7 +185,7 @@ public class SDRTrunk implements Listener<TunerEvent>
         if(!headless)
         {
             mResourceMonitor.start();
-            mMainWindow = FxToolkit.callAndWait(() -> new MainWindow(mUserPreferences, mPlaylistManager,
+            mMainWindow = FxToolkit.callAndWait(() -> new MainWindow(mSettings, mPlaylistManager,
                 mTunerManager, audioPlaybackManager, aliasModel, mIconModel, mapService, mResourceMonitor,
                 mDiagnosticMonitor, this::processShutdown));
         }
@@ -257,13 +243,13 @@ public class SDRTrunk implements Listener<TunerEvent>
             {
                 //Show the calibration dialog after the main window is showing
                 Platform.runLater(() -> {
-                    CalibrationDialog calibrationDialog = mWindowManager.getCalibrationDialog(mUserPreferences);
+                    CalibrationDialog calibrationDialog = mWindowManager.getCalibrationDialog(mSettings);
                     Optional<ButtonType> calibrate = calibrationDialog.showAndWait();
 
                     if(calibrate.isPresent() && calibrate.get().getText().equals("Calibrate"))
                     {
-                        MyEventBus.getGlobalEventBus().post(new ViewUserPreferenceEditorRequest(
-                            PreferenceEditorType.VECTOR_CALIBRATION));
+                        MyEventBus.getGlobalEventBus().post(new ViewSettingsEditorRequest(
+                            SettingsPageType.PERFORMANCE));
                         MyEventBus.getGlobalEventBus().post(new CalibrateRequest());
                     }
                     else
@@ -308,7 +294,7 @@ public class SDRTrunk implements Listener<TunerEvent>
             else
             {
                 Platform.runLater(() -> new ChannelAutoStartWindow(mPlaylistManager.getChannelProcessingManager(),
-                    channels, mUserPreferences, mMainWindow != null ? mMainWindow.getStage() : null).show());
+                    channels, mSettings, mMainWindow != null ? mMainWindow.getStage() : null).show());
             }
         }
     }
@@ -353,7 +339,7 @@ public class SDRTrunk implements Listener<TunerEvent>
      */
     private void loadProperties()
     {
-        Path propertiesPath = mUserPreferences.getDirectoryPreference().getDirectoryApplicationRoot().resolve("SDRTrunk.properties");
+        Path propertiesPath = mSettings.getDirectorySettings().getDirectoryApplicationRoot().resolve("SDRTrunk.properties");
 
         if(!Files.exists(propertiesPath))
         {
@@ -445,7 +431,7 @@ public class SDRTrunk implements Listener<TunerEvent>
 
         try
         {
-            logsDirectory = mUserPreferences.getDirectoryPreference().getDirectoryApplicationLog().toString();
+            logsDirectory = mSettings.getDirectorySettings().getDirectoryApplicationLog().toString();
         }
         catch(Throwable t2)
         {

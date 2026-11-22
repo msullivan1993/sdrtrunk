@@ -65,7 +65,7 @@ public class ThinlineRadioCoreEditor extends RdioScannerEditor
             {
                 // Leave a clear reason in the name tooltip path via disabled switch; log once is enough in UI later.
             }
-            String preferenceUrl = getPlaylistManager().getUserPreferences().getThinlineRadioPreference().getUrl();
+            String preferenceUrl = getPlaylistManager().getSettings().getThinlineRadioPreference().getUrl();
             String host = getHostTextField().getText();
             if(preferenceUrl != null && !preferenceUrl.isBlank() &&
                 (host == null || host.isBlank() || host.startsWith("http://localhost")))

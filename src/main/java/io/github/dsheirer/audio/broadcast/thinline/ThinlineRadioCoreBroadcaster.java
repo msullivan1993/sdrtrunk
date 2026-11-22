@@ -43,7 +43,7 @@ import io.github.dsheirer.identifier.patch.PatchGroup;
 import io.github.dsheirer.identifier.patch.PatchGroupIdentifier;
 import io.github.dsheirer.identifier.radio.RadioIdentifier;
 import io.github.dsheirer.gui.playlist.radioreference.RadioReferenceDecoder;
-import io.github.dsheirer.preference.UserPreferences;
+import io.github.dsheirer.settings.Settings;
 import io.github.dsheirer.identifier.talkgroup.TalkgroupIdentifier;
 import io.github.dsheirer.util.ThreadPool;
 import java.net.URI;
@@ -75,7 +75,7 @@ public class ThinlineRadioCoreBroadcaster extends AbstractAudioBroadcaster<Thinl
     private static final java.util.Set<ThinlineRadioCoreBroadcaster> LIVE = ConcurrentHashMap.newKeySet();
 
     private final AliasModel mAliasModel;
-    private final UserPreferences mUserPreferences;
+    private final Settings mUserPreferences;
     // Both attempts together stay under the server's 15 second wait for a requested upload.
     private static final int UPLOAD_ATTEMPTS = 2;
     private static final Duration UPLOAD_TIMEOUT = Duration.ofSeconds(6);
@@ -121,7 +121,7 @@ public class ThinlineRadioCoreBroadcaster extends AbstractAudioBroadcaster<Thinl
     }
 
     public ThinlineRadioCoreBroadcaster(ThinlineRadioCoreConfiguration configuration, AliasModel aliasModel,
-                                        UserPreferences userPreferences)
+                                        Settings userPreferences)
     {
         super(configuration);
         mAliasModel = aliasModel;
