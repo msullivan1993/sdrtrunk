@@ -29,8 +29,9 @@ import io.github.dsheirer.protocol.Protocol;
  *
  * MDC-1200 unit IDs are 16-bit values that are programmed and displayed as four hex digits.  Most agencies use IDs
  * made of the digits 0-9 only (e.g. 1234), and expect to see the same digits, so getStreamingValue() reports those IDs
- * as the decimal number with the same digits (hex 0x1234 is reported as 1234).  IDs that contain the hex digits A-F
- * can't be written that way, and are reported as their numeric value.
+ * as the decimal number with the same digits (hex 0x1234 is reported as 1234, always 9999 or less).  IDs that contain
+ * the hex digits A-F can't be written that way, and are reported as 10000 plus their numeric value (0x96E4 is reported
+ * as 48628), so that they never collide with an ID made of the digits 0-9.
  */
 public class MDC1200RadioIdentifier extends RadioIdentifier implements ISignallingRadioIdentifier
 {
@@ -64,6 +65,11 @@ public class MDC1200RadioIdentifier extends RadioIdentifier implements ISignalli
         return mEmergency;
     }
 
+    /**
+     * Offset added to the numeric value of unit IDs that contain the hex digits A-F when reported to streaming services.
+     */
+    public static final int HEX_ID_STREAMING_OFFSET = 10000;
+
     @Override
     public Protocol getProtocol()
     {
@@ -82,7 +88,7 @@ public class MDC1200RadioIdentifier extends RadioIdentifier implements ISignalli
     /**
      * Value to report to streaming services that only accept a numeric unit ID.
      * @return the decimal number with the same digits as the hex unit ID when it uses the digits 0-9 only, otherwise
-     * the numeric value of the unit ID.
+     * 10000 plus the numeric value of the unit ID.
      */
     @Override
     public int getStreamingValue()
@@ -94,7 +100,7 @@ public class MDC1200RadioIdentifier extends RadioIdentifier implements ISignalli
             return Integer.parseInt(hex);
         }
 
-        return getValue();
+        return HEX_ID_STREAMING_OFFSET + getValue();
     }
 
     /**
