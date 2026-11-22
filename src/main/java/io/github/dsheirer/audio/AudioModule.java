@@ -69,12 +69,14 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
 
     /**
      * Calling radio (FROM) identifiers from analog signalling (e.g. an MDC-1200 PTT ID) belong to one transmission.
-     * When a new call opens, a FROM identifier older than this is left over from an earlier call and is removed, so
-     * that it isn't attached to a call from a radio that sent no ID.  A pre-ID can decode shortly before the squelch
+     * When a new call opens, a signalling calling radio older than this is left over from an earlier call and is
+     * removed, so that it isn't attached to a call from a radio that sent no ID.  Only signalling calling radio
+     * identifiers are timed and removed: CTCSS/DCS tone identifiers are also FROM identifiers, and they arrive at the
+     * start of every call, so they must not keep an old calling radio alive.  A pre-ID can decode shortly before the squelch
      * opens (e.g. while a CTCSS-gated squelch is still confirming the tone), so recent identifiers are kept.
      */
     private static final long STALE_FROM_IDENTIFIER_NANOS = TimeUnit.MILLISECONDS.toNanos(750);
-    private long mLastFromIdentifierNanos = 0;
+    private long mLastCallingRadioNanos = 0;
     private Listener<IdentifierUpdateNotification> mIdentifierUpdateListener;
 
     /**
@@ -261,11 +263,7 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
                         }
                     }
 
-                    mLastFromIdentifierNanos = System.nanoTime();
-                }
-                else if((notification.isAdd() || notification.isSilentAdd()) && identifier.getRole() == Role.FROM)
-                {
-                    mLastFromIdentifierNanos = System.nanoTime();
+                    mLastCallingRadioNanos = System.nanoTime();
                 }
 
                 listener.receive(notification);
@@ -306,10 +304,12 @@ public class AudioModule extends AbstractAudioModule implements ISquelchStateLis
      */
     private void removeStaleFromIdentifiers()
     {
-        if(System.nanoTime() - mLastFromIdentifierNanos > STALE_FROM_IDENTIFIER_NANOS &&
-            !getIdentifierCollection().getIdentifiers(Role.FROM).isEmpty())
+        if(System.nanoTime() - mLastCallingRadioNanos > STALE_FROM_IDENTIFIER_NANOS)
         {
-            getIdentifierCollection().remove(Role.FROM);
+            for(Identifier callingRadio : getCallingRadioIdentifiers())
+            {
+                getIdentifierCollection().remove(callingRadio);
+            }
         }
     }
 
