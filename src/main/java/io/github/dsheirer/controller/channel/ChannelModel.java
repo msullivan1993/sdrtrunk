@@ -83,7 +83,7 @@ public class ChannelModel implements Listener<ChannelEvent>
             return;
         }
 
-        mChannels.stream().filter(channel -> channel.getAliasListName().equals(oldName))
+        mChannels.stream().filter(channel -> oldName.equals(channel.getAliasListName()))
                 .forEach(channel -> channel.setAliasListName(newName));
     }
 
@@ -98,7 +98,7 @@ public class ChannelModel implements Listener<ChannelEvent>
             return;
         }
 
-        mChannels.stream().filter(channel -> channel.getAliasListName().equals(aliasListName))
+        mChannels.stream().filter(channel -> aliasListName.equals(channel.getAliasListName()))
                 .forEach(channel -> channel.setAliasListName(null));
     }
 

@@ -226,7 +226,7 @@ public class AliasModel
             return;
         }
 
-        mAliases.removeIf(alias -> alias.getAliasListName().equals(aliasListName));
+        mAliases.removeIf(alias -> aliasListName.equals(alias.getAliasListName()));
         mAliasListMap.remove(aliasListName);
         mAliasListConfigurations.removeIf(configuration -> aliasListName.equals(configuration.getName()));
     }
