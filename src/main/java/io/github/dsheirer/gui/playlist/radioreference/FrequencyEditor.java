@@ -97,6 +97,7 @@ public class FrequencyEditor extends VBox
     private Button mCreateButton;
     private Label mChannelCreatedLabel;
     private CheckBox mShowCreatedChannelCheckBox;
+    private CheckBox mAutoStartCheckBox;
     private ModeDecoderType mModeDecoderType;
     private long mFrequency;
     private static final String NO_ALIAS_LIST = "(None)";
@@ -307,6 +308,9 @@ public class FrequencyEditor extends VBox
         GridPane.setConstraints(getAliasWarningLabel(), 1, ++row);
         gridPane.getChildren().add(getAliasWarningLabel());
 
+        GridPane.setConstraints(getAutoStartCheckBox(), 1, ++row);
+        gridPane.getChildren().add(getAutoStartCheckBox());
+
         GridPane.setConstraints(getShowCreatedChannelCheckBox(), 1, ++row);
         gridPane.getChildren().add(getShowCreatedChannelCheckBox());
 
@@ -364,6 +368,7 @@ public class FrequencyEditor extends VBox
             getNameTextField().setDisable(true);
             getCreateButton().setDisable(true);
             getShowCreatedChannelCheckBox().setDisable(true);
+            getAutoStartCheckBox().setDisable(true);
         }
 
         updateAliasControls(true);
@@ -405,6 +410,7 @@ public class FrequencyEditor extends VBox
                             getNameTextField().setDisable(disable);
                             getCreateButton().setDisable(disable);
                             getShowCreatedChannelCheckBox().setDisable(disable);
+                            getAutoStartCheckBox().setDisable(disable);
 
                             updateAliasControls(true);
 
@@ -493,6 +499,21 @@ public class FrequencyEditor extends VBox
         }
 
         return mShowCreatedChannelCheckBox;
+    }
+
+    private CheckBox getAutoStartCheckBox()
+    {
+        if(mAutoStartCheckBox == null)
+        {
+            mAutoStartCheckBox = new CheckBox("Auto-Start Channel");
+            mAutoStartCheckBox.setDisable(true);
+            mAutoStartCheckBox.setTooltip(new Tooltip("Start the created channel automatically when sdrtrunk starts"));
+            mAutoStartCheckBox.setSelected(mSettings.getRadioReferenceSettings().isAutoStartImportedChannels());
+            mAutoStartCheckBox.selectedProperty().addListener((observable, oldValue, selected) ->
+                mSettings.getRadioReferenceSettings().setAutoStartImportedChannels(selected));
+        }
+
+        return mAutoStartCheckBox;
     }
 
     private Label getChannelCreatedLabel()
@@ -616,6 +637,8 @@ public class FrequencyEditor extends VBox
         {
             return;
         }
+
+        channel.setAutoStart(getAutoStartCheckBox().isSelected());
 
         if(channelAssigned && channel.getDecodeConfiguration() instanceof DecodeConfigAnalog analog)
         {
@@ -1388,6 +1411,7 @@ public class FrequencyEditor extends VBox
             Platform.runLater(() -> {
                 getShowCreatedChannelCheckBox().setSelected(mSettings.getRadioReferenceSettings().getShowChannelEditor(mLevel));
                 getOwnAliasListCheckBox().setSelected(mSettings.getRadioReferenceSettings().isConventionalOwnAliasList());
+                getAutoStartCheckBox().setSelected(mSettings.getRadioReferenceSettings().isAutoStartImportedChannels());
                 updateAliasWarning();
             });
         }

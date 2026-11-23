@@ -119,6 +119,7 @@ public class SiteEditor extends GridPane
     private TextField mSiteTextField;
     private TextField mNameTextField;
     private CheckBox mGoToChannelEditorCheckBox;
+    private CheckBox mAutoStartCheckBox;
     private Label mProtocolNotSupportedLabel;
     private RadioReferenceDecoder mRadioReferenceDecoder;
     private EnrichedSite mCurrentSite;
@@ -240,7 +241,7 @@ public class SiteEditor extends GridPane
         HBox createBox = new HBox();
         createBox.setAlignment(Pos.CENTER_LEFT);
         createBox.setSpacing(10);
-        createBox.getChildren().addAll(getCreateChannelConfigurationButton(), getGoToChannelEditorCheckBox());
+        createBox.getChildren().addAll(getCreateChannelConfigurationButton(), getAutoStartCheckBox(), getGoToChannelEditorCheckBox());
         GridPane.setConstraints(createBox, 2, ++row);
         getChildren().addAll(createBox);
 
@@ -288,6 +289,7 @@ public class SiteEditor extends GridPane
         getNameTextField().setDisable(disable || !supported);
         getCreateChannelConfigurationButton().setDisable(disable || !supported);
         getGoToChannelEditorCheckBox().setDisable(disable || !supported);
+        getAutoStartCheckBox().setDisable(disable || !supported);
         getAliasListNameComboBox().setDisable(disable || !supported);
         getNewAliasListButton().setDisable(disable || !supported);
         getNewSystemAliasListButton().setDisable(disable || !supported || system == null);
@@ -305,6 +307,7 @@ public class SiteEditor extends GridPane
 
         getCreateChannelConfigurationButton().setVisible(false);
         getGoToChannelEditorCheckBox().setVisible(false);
+        getAutoStartCheckBox().setVisible(false);
         getProtocolNotSupportedLabel().setVisible(false);
 
         if(site != null)
@@ -354,6 +357,7 @@ public class SiteEditor extends GridPane
 
                 getCreateChannelConfigurationButton().setVisible(true);
                 getGoToChannelEditorCheckBox().setVisible(true);
+                getAutoStartCheckBox().setVisible(true);
                 getSystemTextField().setText(system.getName());
                 getSiteTextField().setText(mCurrentSite.getDescription());
                 getNameTextField().setText("Control");
@@ -482,6 +486,8 @@ public class SiteEditor extends GridPane
                     gotoChannel = channel;
                 }
 
+                channel.setAutoStart(getAutoStartCheckBox().isSelected());
+
                 mPlaylistManager.getChannelModel().addChannel(channel);
             }
         }
@@ -548,6 +554,8 @@ public class SiteEditor extends GridPane
 
                 channel.setSourceConfiguration(sourceConfig);
             }
+
+            channel.setAutoStart(getAutoStartCheckBox().isSelected());
 
             mPlaylistManager.getChannelModel().addChannel(channel);
 
@@ -626,6 +634,8 @@ public class SiteEditor extends GridPane
                     channel.setSourceConfiguration(sourceConfig);
                 }
 
+                channel.setAutoStart(getAutoStartCheckBox().isSelected());
+
                 mPlaylistManager.getChannelModel().addChannel(channel);
 
                 if(getGoToChannelEditorCheckBox().isSelected())
@@ -652,6 +662,8 @@ public class SiteEditor extends GridPane
                     {
                         gotoChannel = channel;
                     }
+
+                    channel.setAutoStart(getAutoStartCheckBox().isSelected());
 
                     mPlaylistManager.getChannelModel().addChannel(channel);
                 }
@@ -728,6 +740,8 @@ public class SiteEditor extends GridPane
                     channel.setSourceConfiguration(sourceConfig);
                 }
 
+                channel.setAutoStart(getAutoStartCheckBox().isSelected());
+
                 mPlaylistManager.getChannelModel().addChannel(channel);
 
                 if(getGoToChannelEditorCheckBox().isSelected())
@@ -755,6 +769,8 @@ public class SiteEditor extends GridPane
                     {
                         gotoChannel = channel;
                     }
+
+                    channel.setAutoStart(getAutoStartCheckBox().isSelected());
 
                     mPlaylistManager.getChannelModel().addChannel(channel);
                 }
@@ -1228,6 +1244,21 @@ public class SiteEditor extends GridPane
         return mCreateChannelConfigurationButton;
     }
 
+    private CheckBox getAutoStartCheckBox()
+    {
+        if(mAutoStartCheckBox == null)
+        {
+            mAutoStartCheckBox = new CheckBox("Auto-Start");
+            mAutoStartCheckBox.setDisable(true);
+            mAutoStartCheckBox.setVisible(false);
+            mAutoStartCheckBox.setSelected(mSettings.getRadioReferenceSettings().isAutoStartImportedChannels());
+            mAutoStartCheckBox.selectedProperty().addListener((observable, oldValue, selected) ->
+                mSettings.getRadioReferenceSettings().setAutoStartImportedChannels(selected));
+        }
+
+        return mAutoStartCheckBox;
+    }
+
     private CheckBox getGoToChannelEditorCheckBox()
     {
         if(mGoToChannelEditorCheckBox == null)
@@ -1423,8 +1454,11 @@ public class SiteEditor extends GridPane
     {
         if(settingsType == SettingsType.RADIO_REFERENCE)
         {
-            Platform.runLater(() -> getGoToChannelEditorCheckBox().setSelected(mSettings.getRadioReferenceSettings()
-                .isCreateAndShowChannelEditor()));
+            Platform.runLater(() -> {
+                getGoToChannelEditorCheckBox().setSelected(mSettings.getRadioReferenceSettings()
+                    .isCreateAndShowChannelEditor());
+                getAutoStartCheckBox().setSelected(mSettings.getRadioReferenceSettings().isAutoStartImportedChannels());
+            });
         }
     }
 }

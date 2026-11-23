@@ -167,6 +167,14 @@ public class RadioReferenceSettingsPage extends SettingsPage
             .defaultValue(siteChannel.selectedProperty(), RadioReferenceSettings.DEFAULT_CREATE_AND_SHOW_CHANNEL_EDITOR,
                 siteChannel::setSelected);
 
+        ToggleSwitch autoStart = new ToggleSwitch();
+        autoStart.setSelected(mRadioReferenceSettings.isAutoStartImportedChannels());
+        autoStart.selectedProperty().addListener((observable, oldValue, selected) ->
+            mRadioReferenceSettings.setAutoStartImportedChannels(selected));
+        imports.addRow("Set channels created from Radio Reference to auto-start", autoStart)
+            .defaultValue(autoStart.selectedProperty(), RadioReferenceSettings.DEFAULT_AUTO_START_IMPORTED_CHANNELS,
+                autoStart::setSelected);
+
         ToggleSwitch ownAliasList = new ToggleSwitch();
         ownAliasList.setSelected(mRadioReferenceSettings.isConventionalOwnAliasList());
         ownAliasList.selectedProperty().addListener((observable, oldValue, selected) ->
