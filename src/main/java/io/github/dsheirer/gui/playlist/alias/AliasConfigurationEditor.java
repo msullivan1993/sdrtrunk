@@ -31,6 +31,7 @@ import io.github.dsheirer.gui.playlist.Editor;
 import io.github.dsheirer.gui.playlist.IAliasListRefreshListener;
 import io.github.dsheirer.gui.theme.ThemeManager;
 import io.github.dsheirer.icon.Icon;
+import io.github.dsheirer.playlist.AliasListCleanup;
 import io.github.dsheirer.playlist.PlaylistManager;
 import io.github.dsheirer.settings.SettingsType;
 import io.github.dsheirer.settings.Settings;
@@ -54,12 +55,14 @@ import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.MenuButton;
 import javafx.scene.control.MenuItem;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.SelectionMode;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.SplitPane;
@@ -103,6 +106,7 @@ public class AliasConfigurationEditor extends SplitPane implements IAliasListRef
     private Button mNewAliasButton;
     private Button mDeleteAliasButton;
     private Button mRenameAliasButton;
+    private Button mUnusedAliasListsButton;
     private Button mCloneAliasButton;
     private MenuButton mMoveToAliasButton;
     private VBox mButtonBox;
@@ -482,7 +486,8 @@ public class AliasConfigurationEditor extends SplitPane implements IAliasListRef
             searchBox.setAlignment(Pos.BASELINE_RIGHT);
 
             mSearchAndListSelectionBox.getChildren().addAll(listLabel, getAliasListNameComboBox(),
-                getNewAliasListButton(), getRenameAliasListButton(), getDeleteAliasListButton(), searchBox);
+                getNewAliasListButton(), getRenameAliasListButton(), getDeleteAliasListButton(),
+                getUnusedAliasListsButton(), searchBox);
         }
 
         return mSearchAndListSelectionBox;
@@ -612,6 +617,137 @@ public class AliasConfigurationEditor extends SplitPane implements IAliasListRef
 
         }
         return mRenameAliasButton;
+    }
+
+    /**
+     * Button that lists the alias lists no channel uses and deletes the ones the user selects.
+     */
+    private Button getUnusedAliasListsButton()
+    {
+        if(mUnusedAliasListsButton == null)
+        {
+            mUnusedAliasListsButton = new Button("Unused Lists...");
+            mUnusedAliasListsButton.setTooltip(new Tooltip("Find and delete alias lists that no channel uses"));
+            mUnusedAliasListsButton.setOnAction(event -> showUnusedAliasLists());
+        }
+
+        return mUnusedAliasListsButton;
+    }
+
+    /**
+     * Shows the alias lists that no channel uses, with each list's aliases and Radio Reference tracking, and deletes
+     * the lists the user selects.
+     */
+    private void showUnusedAliasLists()
+    {
+        List<String> unused = AliasListCleanup.getUnusedAliasLists(mPlaylistManager.getAliasModel().aliasListNames(),
+            mPlaylistManager.getChannelModel().getChannels());
+
+        if(unused.isEmpty())
+        {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION, "Every alias list is used by at least one channel.",
+                ButtonType.OK);
+            alert.setTitle("Unused Alias Lists");
+            alert.setHeaderText("No Unused Alias Lists");
+            alert.initOwner(getUnusedAliasListsButton().getScene().getWindow());
+            alert.showAndWait();
+            return;
+        }
+
+        VBox content = new VBox(8);
+        content.setPrefWidth(560);
+
+        Label explanation = new Label("These alias lists aren't used by any channel, for example lists left behind " +
+            "when their channels were deleted.  Deleting an alias list deletes all of its aliases and any Radio " +
+            "Reference tracking, and can't be undone.  Keep any list you're saving for channels you'll add later.");
+        explanation.setWrapText(true);
+        content.getChildren().add(explanation);
+
+        List<CheckBox> checkBoxes = new ArrayList<>();
+        VBox listBox = new VBox(6);
+
+        for(String name : unused)
+        {
+            List<Alias> aliases = AliasListCleanup.getAliases(name, mPlaylistManager.getAliasModel().getAliases());
+            StringBuilder sb = new StringBuilder();
+            sb.append(name).append(" - ").append(aliases.size()).append(aliases.size() == 1 ? " alias" : " aliases");
+
+            AliasListConfiguration configuration = mPlaylistManager.getAliasModel().getAliasListConfiguration(name);
+
+            if(configuration != null && configuration.isTrackingRadioReferenceSystem())
+            {
+                sb.append(" - tracks Radio Reference system '").append(configuration.getRadioReferenceSystemName())
+                    .append("'");
+            }
+
+            CheckBox checkBox = new CheckBox(sb.toString());
+            checkBox.setUserData(name);
+
+            if(!aliases.isEmpty())
+            {
+                StringBuilder names = new StringBuilder();
+
+                for(int x = 0; x < aliases.size() && x < 20; x++)
+                {
+                    names.append(aliases.get(x).getName()).append("\n");
+                }
+
+                if(aliases.size() > 20)
+                {
+                    names.append("and ").append(aliases.size() - 20).append(" more");
+                }
+
+                checkBox.setTooltip(new Tooltip(names.toString().trim()));
+            }
+
+            checkBoxes.add(checkBox);
+            listBox.getChildren().add(checkBox);
+        }
+
+        ScrollPane scrollPane = new ScrollPane(listBox);
+        scrollPane.setFitToWidth(true);
+        scrollPane.setPrefViewportHeight(Math.min(300, unused.size() * 28));
+        content.getChildren().add(scrollPane);
+
+        CheckBox selectAll = new CheckBox("Select all");
+        selectAll.selectedProperty().addListener((observable, oldValue, selected) ->
+            checkBoxes.forEach(checkBox -> checkBox.setSelected(selected)));
+        content.getChildren().add(selectAll);
+
+        ButtonType delete = new ButtonType("Delete Selected", ButtonBar.ButtonData.YES);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "", ButtonType.CANCEL, delete);
+        alert.setTitle("Unused Alias Lists");
+        alert.setHeaderText(unused.size() + (unused.size() == 1 ? " alias list isn't" : " alias lists aren't") +
+            " used by any channel");
+        alert.getDialogPane().setContent(content);
+        alert.initOwner(getUnusedAliasListsButton().getScene().getWindow());
+
+        Button deleteButton = (Button)alert.getDialogPane().lookupButton(delete);
+        deleteButton.setDefaultButton(false);
+        ((Button)alert.getDialogPane().lookupButton(ButtonType.CANCEL)).setDefaultButton(true);
+        deleteButton.setDisable(true);
+        Runnable updateDeleteButton = () -> {
+            long count = checkBoxes.stream().filter(CheckBox::isSelected).count();
+            deleteButton.setDisable(count == 0);
+            deleteButton.setText(count == 0 ? "Delete Selected" : "Delete " + count + (count == 1 ? " List" : " Lists"));
+        };
+        checkBoxes.forEach(checkBox -> checkBox.selectedProperty().addListener((observable, oldValue, selected) ->
+            updateDeleteButton.run()));
+
+        Optional<ButtonType> result = alert.showAndWait();
+
+        if(result.isPresent() && result.get() == delete)
+        {
+            for(CheckBox checkBox : checkBoxes)
+            {
+                if(checkBox.isSelected())
+                {
+                    String name = (String)checkBox.getUserData();
+                    mLog.info("Deleting unused alias list [" + name + "]");
+                    mPlaylistManager.deleteAliasList(name);
+                }
+            }
+        }
     }
 
     private Button getDeleteAliasListButton() {

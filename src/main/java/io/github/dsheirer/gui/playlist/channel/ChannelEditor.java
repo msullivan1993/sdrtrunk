@@ -20,11 +20,15 @@
 package io.github.dsheirer.gui.playlist.channel;
 
 import com.google.common.base.Joiner;
+import io.github.dsheirer.alias.Alias;
+import io.github.dsheirer.alias.AliasListConfiguration;
 import io.github.dsheirer.controller.channel.Channel;
 import io.github.dsheirer.gui.control.AccessibilityUtil;
 import io.github.dsheirer.gui.playlist.IAliasListRefreshListener;
 import io.github.dsheirer.module.decode.DecoderFactory;
 import io.github.dsheirer.module.decode.DecoderType;
+import io.github.dsheirer.module.decode.analog.DecodeConfigAnalog;
+import io.github.dsheirer.playlist.AliasListCleanup;
 import io.github.dsheirer.playlist.PlaylistManager;
 import io.github.dsheirer.settings.Settings;
 import io.github.dsheirer.source.tuner.manager.TunerManager;
@@ -46,7 +50,9 @@ import javafx.geometry.Pos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuButton;
@@ -582,35 +588,194 @@ public class ChannelEditor extends SplitPane implements IFilterProcessor, IAlias
 
                 if(selected != null)
                 {
-                    Alert alert = new Alert(Alert.AlertType.CONFIRMATION,
-                        "Do you want to delete the selected channel?", ButtonType.NO, ButtonType.YES);
-                    alert.setTitle("Delete Channel");
-                    alert.setHeaderText("Are you sure?");
-                    alert.initOwner(((Node)getDeleteButton()).getScene().getWindow());
-
-                    Optional<ButtonType> result = alert.showAndWait();
-
-                    if(result.get() == ButtonType.YES)
-                    {
-                        if(selected.isProcessing())
-                        {
-                            try
-                            {
-                                mPlaylistManager.getChannelProcessingManager().stop(selected);
-                            }
-                            catch(Exception e)
-                            {
-                                mLog.error("Couldn't stop channel [" + selected.getName() + "] prior to delete by user");
-                            }
-                        }
-
-                        mPlaylistManager.getChannelModel().removeChannel(selected);
-                    }
+                    deleteChannel(selected);
                 }
             });
         }
 
         return mDeleteButton;
+    }
+
+    /**
+     * Confirms and deletes the channel.  When the channel's alias list isn't used by any other channel, offers to
+     * delete the alias list and its aliases too.  When the alias list is shared and the channel is an analog channel
+     * whose talkgroup alias belongs only to it, offers to delete that alias.
+     */
+    private void deleteChannel(Channel channel)
+    {
+        String aliasListName = channel.getAliasListName();
+        boolean hasList = aliasListName != null && !aliasListName.isEmpty();
+        List<Channel> otherChannels = AliasListCleanup.getOtherChannels(aliasListName, channel,
+            mPlaylistManager.getChannelModel().getChannels());
+        List<Alias> listAliases = AliasListCleanup.getAliases(aliasListName,
+            mPlaylistManager.getAliasModel().getAliases());
+        Alias channelAlias = hasList ? AliasListCleanup.getChannelTalkgroupAlias(channel, listAliases, otherChannels) : null;
+        boolean offerList = hasList && otherChannels.isEmpty();
+
+        VBox content = new VBox(10);
+        content.setPrefWidth(540);
+        content.getChildren().add(wrapped("Delete channel '" + channel.getName() + "'?"));
+
+        CheckBox deleteListCheckBox = null;
+        CheckBox deleteAliasCheckBox = null;
+
+        if(offerList)
+        {
+            StringBuilder sb = new StringBuilder();
+            sb.append("No other channel uses alias list '").append(aliasListName).append("'. ");
+
+            if(listAliases.isEmpty())
+            {
+                sb.append("It has no aliases.");
+            }
+            else
+            {
+                sb.append("It has ").append(listAliases.size()).append(listAliases.size() == 1 ? " alias: " : " aliases: ")
+                    .append(describeAliases(listAliases)).append(".");
+            }
+
+            deleteListCheckBox = new CheckBox("Also delete alias list '" + aliasListName + "'" +
+                (listAliases.isEmpty() ? "" : " and its " + listAliases.size() + (listAliases.size() == 1 ? " alias" : " aliases")));
+            content.getChildren().addAll(wrapped(sb.toString()), deleteListCheckBox);
+
+            AliasListConfiguration configuration = mPlaylistManager.getAliasModel().getAliasListConfiguration(aliasListName);
+
+            if(configuration != null && configuration.isTrackingRadioReferenceSystem())
+            {
+                Label tracking = wrapped("This alias list tracks Radio Reference system '" +
+                    configuration.getRadioReferenceSystemName() + "'" + (configuration.isAutoUpdate() ?
+                    " with Auto-Update on" : "") + ".  Deleting the alias list also removes the tracking.");
+                tracking.setStyle("-fx-text-fill: #d2691e;");
+                content.getChildren().add(tracking);
+            }
+        }
+        else if(hasList)
+        {
+            content.getChildren().add(wrapped("Alias list '" + aliasListName + "' is also used by " +
+                describeChannels(otherChannels) + ", so it's kept."));
+        }
+
+        if(channelAlias != null)
+        {
+            deleteAliasCheckBox = new CheckBox("Also delete alias '" + channelAlias.getName() + "' (" +
+                AliasListCleanup.getAssignedTalkgroupProtocol(channel) + " talkgroup " +
+                ((DecodeConfigAnalog)channel.getDecodeConfiguration()).getTalkgroup() + "), used only by this channel");
+            content.getChildren().add(deleteAliasCheckBox);
+
+            if(deleteListCheckBox != null)
+            {
+                deleteAliasCheckBox.disableProperty().bind(deleteListCheckBox.selectedProperty());
+            }
+        }
+
+        if(deleteListCheckBox != null || deleteAliasCheckBox != null)
+        {
+            content.getChildren().add(wrapped("Deleted aliases and alias lists can't be recovered."));
+        }
+
+        ButtonType delete = new ButtonType("Delete", ButtonBar.ButtonData.YES);
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION, "", ButtonType.CANCEL, delete);
+        alert.setTitle("Delete Channel");
+        alert.setHeaderText("Are you sure?");
+        alert.getDialogPane().setContent(content);
+        alert.initOwner(((Node)getDeleteButton()).getScene().getWindow());
+        ((Button)alert.getDialogPane().lookupButton(ButtonType.CANCEL)).setDefaultButton(true);
+        ((Button)alert.getDialogPane().lookupButton(delete)).setDefaultButton(false);
+
+        Optional<ButtonType> result = alert.showAndWait();
+
+        if(result.isEmpty() || result.get() != delete)
+        {
+            return;
+        }
+
+        if(channel.isProcessing())
+        {
+            try
+            {
+                mPlaylistManager.getChannelProcessingManager().stop(channel);
+            }
+            catch(Exception e)
+            {
+                mLog.error("Couldn't stop channel [" + channel.getName() + "] prior to delete by user");
+            }
+        }
+
+        mPlaylistManager.getChannelModel().removeChannel(channel);
+
+        if(deleteListCheckBox != null && deleteListCheckBox.isSelected())
+        {
+            mLog.info("Deleting alias list [" + aliasListName + "] with [" + listAliases.size() +
+                "] aliases along with channel [" + channel.getName() + "]");
+            mPlaylistManager.deleteAliasList(aliasListName);
+        }
+        else if(deleteAliasCheckBox != null && deleteAliasCheckBox.isSelected())
+        {
+            mLog.info("Deleting alias [" + channelAlias.getName() + "] from alias list [" + aliasListName +
+                "] along with channel [" + channel.getName() + "]");
+            mPlaylistManager.getAliasModel().removeAlias(channelAlias);
+        }
+    }
+
+    private static Label wrapped(String text)
+    {
+        Label label = new Label(text);
+        label.setWrapText(true);
+        label.setMaxWidth(Double.MAX_VALUE);
+        return label;
+    }
+
+    /**
+     * Alias names for display, limited to the first several.
+     */
+    private static String describeAliases(List<Alias> aliases)
+    {
+        int max = 8;
+        StringBuilder sb = new StringBuilder();
+
+        for(int x = 0; x < aliases.size() && x < max; x++)
+        {
+            if(x > 0)
+            {
+                sb.append(", ");
+            }
+
+            sb.append(aliases.get(x).getName());
+        }
+
+        if(aliases.size() > max)
+        {
+            sb.append(" and ").append(aliases.size() - max).append(" more");
+        }
+
+        return sb.toString();
+    }
+
+    /**
+     * Channel names for display, limited to the first several.
+     */
+    private static String describeChannels(List<Channel> channels)
+    {
+        int max = 5;
+        StringBuilder sb = new StringBuilder();
+        sb.append(channels.size()).append(channels.size() == 1 ? " other channel (" : " other channels (");
+
+        for(int x = 0; x < channels.size() && x < max; x++)
+        {
+            if(x > 0)
+            {
+                sb.append(", ");
+            }
+
+            sb.append(channels.get(x).getName());
+        }
+
+        if(channels.size() > max)
+        {
+            sb.append(" and ").append(channels.size() - max).append(" more");
+        }
+
+        return sb.append(")").toString();
     }
 
     private Button getCloneButton()
