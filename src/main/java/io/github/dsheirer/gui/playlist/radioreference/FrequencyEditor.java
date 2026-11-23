@@ -53,6 +53,7 @@ import javafx.collections.FXCollections;
 import javafx.collections.ListChangeListener;
 import javafx.collections.ObservableList;
 import javafx.animation.FadeTransition;
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
@@ -112,6 +113,15 @@ public class FrequencyEditor extends VBox
     private ComboBox<String> mBroadcastChannelComboBox;
     private Label mAliasWarningLabel;
     private Label mTalkgroupLabel;
+    private PauseTransition mStatusTransition;
+    private boolean mStatusShowing = false;
+    private static final String WARNING_STYLE = "-fx-text-fill: #d2691e;";
+    private static final String SUCCESS_STYLE = "-fx-text-fill: #2e8b57; -fx-font-weight: bold;";
+
+    /**
+     * User choices when the talkgroup is already aliased in the selected alias list
+     */
+    private enum ExistingAliasChoice {NEW_ALIAS_LIST, CREATE_ANYWAY, CHANNEL_ONLY, CANCEL}
 
     public FrequencyEditor(Settings settings, RadioReference radioReference,
                            PlaylistManager playlistManager, Level level)
@@ -548,15 +558,28 @@ public class FrequencyEditor extends VBox
 
                         if(existing != null)
                         {
-                            Boolean choice = confirmExisting("Talkgroup " + talkgroup + " is already aliased as '" +
-                                existing.getName() + "' in alias list '" + aliasListName + "'.");
+                            String newListName = RadioReferenceAliasSupport.getNextAliasListName(aliasListName,
+                                mPlaylistManager.getAliasModel().aliasListNames());
+                            ExistingAliasChoice choice = confirmExisting(protocol, talkgroup, existing, aliasListName,
+                                newListName);
 
-                            if(choice == null)
+                            switch(choice)
                             {
-                                return;
+                                case CANCEL:
+                                    return;
+                                case CHANNEL_ONLY:
+                                    create = false;
+                                    break;
+                                case NEW_ALIAS_LIST:
+                                    mPlaylistManager.getAliasModel().addAliasList(newListName);
+                                    refreshAliasListNames();
+                                    getAliasListComboBox().getSelectionModel().select(newListName);
+                                    aliasListName = newListName;
+                                    channel.setAliasListName(newListName);
+                                    break;
+                                default:
+                                    break;
                             }
-
-                            create = choice;
                         }
 
                         if(create)
@@ -577,17 +600,24 @@ public class FrequencyEditor extends VBox
 
                     updateAliasControls(true);
 
+                    StringBuilder status = new StringBuilder();
+                    status.append("Channel created: ").append(channel.getName());
+
+                    if(alias != null)
+                    {
+                        status.append("\nAlias '").append(alias.getName()).append("' (TG ").append(talkgroup)
+                            .append(") added to alias list '").append(aliasListName).append("'");
+                    }
+                    else if(aliasListName != null)
+                    {
+                        status.append("\nAlias list '").append(aliasListName).append("' assigned");
+                    }
+
+                    showStatus(status.toString());
+
                     if(getShowCreatedChannelCheckBox().selectedProperty().get())
                     {
                         MyEventBus.getGlobalEventBus().post(new ViewChannelRequest(channel));
-                    }
-                    else
-                    {
-                        getChannelCreatedLabel().setOpacity(1.0);
-                        FadeTransition transition = new FadeTransition(Duration.seconds(2), getChannelCreatedLabel());
-                        transition.setDelay(Duration.seconds(1));
-                        transition.setToValue(0.0);
-                        transition.play();
                     }
                 }
             });
@@ -912,7 +942,7 @@ public class FrequencyEditor extends VBox
             mAliasWarningLabel = new Label();
             mAliasWarningLabel.setWrapText(true);
             mAliasWarningLabel.setMaxWidth(Double.MAX_VALUE);
-            mAliasWarningLabel.setStyle("-fx-text-fill: #d2691e;");
+            mAliasWarningLabel.setStyle(WARNING_STYLE);
         }
 
         return mAliasWarningLabel;
@@ -976,6 +1006,11 @@ public class FrequencyEditor extends VBox
      */
     private void updateAliasWarning()
     {
+        if(mStatusShowing)
+        {
+            return;
+        }
+
         StringBuilder sb = new StringBuilder();
         String aliasListName = getSelectedAliasListName();
         boolean supported = mModeDecoderType != null && mModeDecoderType.hasDecoderType() && mFrequency > 0;
@@ -1006,6 +1041,14 @@ public class FrequencyEditor extends VBox
                     {
                         sb.append("Talkgroup ").append(talkgroup).append(" is already aliased as '")
                             .append(existing.getName()).append("' in this alias list.");
+
+                        if(protocol == Protocol.APCO25)
+                        {
+                            sb.append(" Create will offer a new alias list '")
+                                .append(RadioReferenceAliasSupport.getNextAliasListName(aliasListName,
+                                    mPlaylistManager.getAliasModel().aliasListNames()))
+                                .append("' for this channel.");
+                        }
                     }
                 }
 
@@ -1044,33 +1087,77 @@ public class FrequencyEditor extends VBox
     }
 
     /**
-     * Asks the user how to proceed when the talkgroup is already aliased.
-     * @return true to create the alias anyway, false to create the channel only, or null to cancel
+     * Shows a success message in the alias status area for a few seconds, after which any alias warning returns.
      */
-    private Boolean confirmExisting(String message)
+    private void showStatus(String message)
     {
-        ButtonType createAnyway = new ButtonType("Create Alias Anyway", ButtonBar.ButtonData.YES);
+        if(mStatusTransition == null)
+        {
+            mStatusTransition = new PauseTransition(Duration.seconds(3));
+            mStatusTransition.setOnFinished(event -> {
+                mStatusShowing = false;
+                getAliasWarningLabel().setStyle(WARNING_STYLE);
+                updateAliasWarning();
+            });
+        }
+
+        mStatusTransition.stop();
+        mStatusShowing = true;
+        getAliasWarningLabel().setStyle(SUCCESS_STYLE);
+        getAliasWarningLabel().setText(message);
+        mStatusTransition.playFromStart();
+    }
+
+    /**
+     * Asks the user how to proceed when the talkgroup is already aliased in the alias list.
+     */
+    private ExistingAliasChoice confirmExisting(Protocol protocol, int talkgroup, Alias existing, String aliasListName,
+                                                String newAliasListName)
+    {
+        StringBuilder sb = new StringBuilder();
+        sb.append("Talkgroup ").append(talkgroup).append(" is already aliased as '").append(existing.getName())
+            .append("' in alias list '").append(aliasListName).append("'.\n\n");
+
+        if(protocol == Protocol.APCO25)
+        {
+            sb.append("P25 conventional channels almost always use talkgroup 1. Aliases (and the streaming settings ")
+                .append("on them) can only tell these channels apart when each channel has its own alias list.\n\n");
+        }
+
+        sb.append("New Alias List: create alias list '").append(newAliasListName)
+            .append("' and put this channel and its alias in it (recommended).\n")
+            .append("Duplicate Alias: add a second alias for the same talkgroup to '").append(aliasListName)
+            .append("' (only one of them will match).\n")
+            .append("Channel Only: create the channel in '").append(aliasListName).append("' without an alias.");
+
+        ButtonType newList = new ButtonType("New Alias List", ButtonBar.ButtonData.YES);
+        ButtonType createAnyway = new ButtonType("Duplicate Alias", ButtonBar.ButtonData.OTHER);
         ButtonType channelOnly = new ButtonType("Channel Only", ButtonBar.ButtonData.NO);
-        Alert alert = new Alert(Alert.AlertType.WARNING, message + "\n\nCreate a duplicate alias, create the channel " +
-            "without an alias, or cancel?", createAnyway, channelOnly, ButtonType.CANCEL);
+        Alert alert = new Alert(Alert.AlertType.WARNING, sb.toString(), newList, createAnyway, channelOnly,
+            ButtonType.CANCEL);
         alert.setTitle("Existing Alias");
-        alert.setHeaderText("Talkgroup Already Aliased");
+        alert.setHeaderText("Talkgroup " + talkgroup + " Already Aliased");
+        alert.getDialogPane().setMinWidth(520);
         alert.initOwner(getCreateButton().getScene().getWindow());
         Optional<ButtonType> result = alert.showAndWait();
 
         if(result.isPresent())
         {
-            if(result.get() == createAnyway)
+            if(result.get() == newList)
             {
-                return true;
+                return ExistingAliasChoice.NEW_ALIAS_LIST;
+            }
+            else if(result.get() == createAnyway)
+            {
+                return ExistingAliasChoice.CREATE_ANYWAY;
             }
             else if(result.get() == channelOnly)
             {
-                return false;
+                return ExistingAliasChoice.CHANNEL_ONLY;
             }
         }
 
-        return null;
+        return ExistingAliasChoice.CANCEL;
     }
 
     /**

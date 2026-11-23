@@ -97,4 +97,17 @@ public class RadioReferenceAliasSupportTest
         assertNull(RadioReferenceAliasSupport.parseTalkgroup(""));
         assertNull(RadioReferenceAliasSupport.parseTalkgroup(null));
     }
+
+    @Test
+    public void nextAliasListName()
+    {
+        assertEquals("MasonKYSO2", RadioReferenceAliasSupport.getNextAliasListName("MasonKYSO", List.of("MasonKYSO")));
+        assertEquals("MasonKYSO4", RadioReferenceAliasSupport.getNextAliasListName("MasonKYSO",
+            List.of("MasonKYSO", "MasonKYSO2", "masonkyso3")));
+        assertEquals("MasonKYSO3", RadioReferenceAliasSupport.getNextAliasListName("MasonKYSO2",
+            List.of("MasonKYSO", "MasonKYSO2")));
+        assertEquals("Station9112", RadioReferenceAliasSupport.getNextAliasListName("Station911", List.of("Station911")));
+        assertEquals("ABCDEFGHIJKLMNOPQRSTUVWX2", RadioReferenceAliasSupport.getNextAliasListName(
+            "ABCDEFGHIJKLMNOPQRSTUVWXY", List.of("ABCDEFGHIJKLMNOPQRSTUVWXY")));
+    }
 }
