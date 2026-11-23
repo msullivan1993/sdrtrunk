@@ -44,6 +44,7 @@ public class RadioReferenceSettings extends AbstractSettings
     public static final AliasListUpdateInterval DEFAULT_ALIAS_LIST_UPDATE_INTERVAL = AliasListUpdateInterval.DAILY;
     public static final boolean DEFAULT_CREATE_AND_SHOW_CHANNEL_EDITOR = true;
     public static final boolean DEFAULT_CONVENTIONAL_OWN_ALIAS_LIST = false;
+    public static final boolean DEFAULT_AUTO_START_IMPORTED_CHANNELS = false;
     public static final boolean DEFAULT_CONVENTIONAL_DEFAULT_TALKGROUP_WARNING = true;
     private final static Logger mLog = LoggerFactory.getLogger(RadioReferenceSettings.class);
     public static final int INVALID_ID = -1;
@@ -57,6 +58,7 @@ public class RadioReferenceSettings extends AbstractSettings
     private Boolean mShowChannelEditorCounty;
     private Boolean mEncryptedTalkgroupImport;
     private Boolean mConventionalOwnAliasList;
+    private Boolean mAutoStartImportedChannels;
     private Boolean mConventionalDefaultTalkgroupWarning;
     private Boolean mCreateAndShowChannelEditor;
     private AliasListUpdateInterval mAliasListUpdateInterval;
@@ -480,6 +482,33 @@ public class RadioReferenceSettings extends AbstractSettings
         mEncryptedTalkgroupImport = doNotMonitor;
         Setting.RADIO_REFERENCE_ENCRYPTED_TALKGROUP_DO_NOT_MONITOR.putBoolean(doNotMonitor);
         notifySettingsUpdated();
+    }
+
+    /**
+     * Indicates if channels created from Radio Reference are set to auto-start.
+     */
+    public boolean isAutoStartImportedChannels()
+    {
+        if(mAutoStartImportedChannels == null)
+        {
+            mAutoStartImportedChannels = Setting.RADIO_REFERENCE_AUTO_START_IMPORTED_CHANNELS
+                .getBoolean(DEFAULT_AUTO_START_IMPORTED_CHANNELS);
+        }
+
+        return mAutoStartImportedChannels;
+    }
+
+    /**
+     * Sets if channels created from Radio Reference are set to auto-start.
+     */
+    public void setAutoStartImportedChannels(boolean autoStart)
+    {
+        if(isAutoStartImportedChannels() != autoStart)
+        {
+            mAutoStartImportedChannels = autoStart;
+            Setting.RADIO_REFERENCE_AUTO_START_IMPORTED_CHANNELS.putBoolean(autoStart);
+            notifySettingsUpdated();
+        }
     }
 
     /**
