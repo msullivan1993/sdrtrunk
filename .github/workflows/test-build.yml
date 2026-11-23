@@ -21,15 +21,18 @@ jobs:
           # Full history so the build info can describe the commit
           fetch-depth: 0
 
+      # This fork's build.gradle packages with Liberica 27.0.1.0.2+5 (to match the local build JDK), and jlink requires
+      # the build JDK to be that exact build, so download it rather than letting setup-java resolve a version.
+      - name: Download Liberica JDK 27.0.1.0.2+5
+        run: curl -fsSL -o "$RUNNER_TEMP/liberica-jdk.tar.gz" "https://download.bell-sw.com/java/27.0.1.0.2+5/bellsoft-jdk27.0.1.0.2+5-linux-amd64-full.tar.gz"
+
       - name: Set up JDK 27
         uses: actions/setup-java@v6
         with:
-          # Same JDK as the upstream nightly workflow, which builds these zips successfully.  setup-java resolves
-          # '27.0.1' to a newer patch build than the one build.gradle downloads for packaging, and jlink then fails
-          # with a build mismatch.
-          java-version: '27.0.0'
-          distribution: 'liberica'
-          java-package: 'jdk+fx'
+          distribution: 'jdkfile'
+          jdkFile: ${{ runner.temp }}/liberica-jdk.tar.gz
+          java-version: '27.0.1'
+          architecture: x64
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6
