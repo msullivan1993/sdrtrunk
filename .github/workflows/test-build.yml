@@ -1,0 +1,66 @@
+# Builds the msullivan1993 test build (all of the fork's features merged on current upstream master) for Windows,
+# Linux and Mac whenever the test branch is pushed, and publishes it as the "testing" pre-release on this repository.
+# Fork only - not part of any upstream pull request.
+name: Test Build
+
+on:
+  push:
+    branches: [ test/thinline-core ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  testing:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # Full history so the build info can describe the commit
+          fetch-depth: 0
+
+      - name: Set up JDK 27
+        uses: actions/setup-java@v6
+        with:
+          # Must match the JDK version downloaded in build.gradle (jdk_download_base) - jlink requires an exact match
+          java-version: '27.0.1'
+          distribution: 'liberica'
+          java-package: 'jdk+fx'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v6
+
+      - name: Build Linux and Mac releases with Gradle
+        run: ./gradlew runtimeZipOthers -PprojectVersion=testing
+
+      - name: Build Windows release with Gradle
+        run: ./gradlew runtimeZipWindows -PprojectVersion=testing
+
+      - name: Create Build Info file
+        run: |
+          echo -e "branch: $GITHUB_REF_NAME\ncommit: $GITHUB_SHA\nbuild: $(date -u +"%Y-%m-%dT%H:%M:%SZ")" > build/image/build_info.txt
+          git log --oneline -15 >> build/image/build_info.txt
+
+      - name: Move the testing tag to this commit
+        run: |
+          git tag -f testing
+          git push -f origin refs/tags/testing
+
+      - name: Publish the testing pre-release
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: testing
+          name: Test build (${{ github.sha }})
+          prerelease: true
+          body: |
+            msullivan1993 test build: current upstream master plus the fork's features under test (access code
+            filters, NBFM hang time, CTCSS fine resolution, MDC-1200/Fleetsync unit IDs and decoder fixes,
+            Radio Reference tone/narrowband import, DMR timeslot aliases, Thinline Radio integration).
+            Built from commit ${{ github.sha }} - see build_info.txt.  Not an official sdrtrunk release.
+          files: |
+            build/image/*.zip
+            build/image/build_info.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
