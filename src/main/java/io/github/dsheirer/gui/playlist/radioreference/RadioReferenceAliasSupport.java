@@ -27,6 +27,8 @@ import io.github.dsheirer.alias.id.talkgroup.Talkgroup;
 import io.github.dsheirer.alias.id.talkgroup.TalkgroupRange;
 import io.github.dsheirer.protocol.Protocol;
 import java.util.Collection;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * Alias support for conventional channels created from Radio Reference frequency entries.  Determines which talkgroup
@@ -42,6 +44,13 @@ public final class RadioReferenceAliasSupport
      * P25 conventional repeaters almost universally use the default talkgroup 1
      */
     public static final int P25_CONVENTIONAL_DEFAULT_TALKGROUP = 1;
+
+    /**
+     * Maximum alias list name length, matching the alias editor's new/rename dialogs
+     */
+    public static final int MAX_ALIAS_LIST_NAME_LENGTH = 25;
+
+    private static final Pattern TRAILING_NUMBER = Pattern.compile("^(.*?)(\\d+)$");
 
     private RadioReferenceAliasSupport()
     {
@@ -187,6 +196,81 @@ public final class RadioReferenceAliasSupport
         }
 
         return null;
+    }
+
+    /**
+     * Next numbered alias list name in a series, for P25 conventional channels that each need their own alias list
+     * because they all use talkgroup 1.  MasonKYSO -> MasonKYSO2, and with MasonKYSO2 and MasonKYSO3 already in use,
+     * either MasonKYSO or MasonKYSO3 -> MasonKYSO4.  A trailing number is treated as a series number only when the
+     * base name (without the number) is also an existing alias list, so Station911 -> Station9112 unless Station
+     * exists.
+     * @param current alias list name
+     * @param existing alias list names
+     * @return next unused alias list name in the series
+     */
+    public static String getNextAliasListName(String current, Collection<String> existing)
+    {
+        if(current == null || current.isBlank())
+        {
+            return null;
+        }
+
+        String base = current.trim();
+        Matcher matcher = TRAILING_NUMBER.matcher(base);
+
+        if(matcher.matches() && !matcher.group(1).isEmpty() && containsIgnoreCase(existing, matcher.group(1)))
+        {
+            base = matcher.group(1);
+        }
+
+        int max = 1;
+
+        if(existing != null)
+        {
+            for(String name : existing)
+            {
+                if(name != null && name.length() > base.length() && name.regionMatches(true, 0, base, 0, base.length()))
+                {
+                    String suffix = name.substring(base.length());
+
+                    if(suffix.matches("\\d{1,6}"))
+                    {
+                        max = Math.max(max, Integer.parseInt(suffix));
+                    }
+                }
+            }
+        }
+
+        int next = max + 1;
+        String candidate;
+
+        do
+        {
+            String suffix = String.valueOf(next);
+            String trimmedBase = base.length() + suffix.length() > MAX_ALIAS_LIST_NAME_LENGTH ?
+                base.substring(0, Math.max(1, MAX_ALIAS_LIST_NAME_LENGTH - suffix.length())) : base;
+            candidate = trimmedBase + suffix;
+            next++;
+        }
+        while(containsIgnoreCase(existing, candidate));
+
+        return candidate;
+    }
+
+    private static boolean containsIgnoreCase(Collection<String> names, String value)
+    {
+        if(names != null)
+        {
+            for(String name : names)
+            {
+                if(name != null && name.equalsIgnoreCase(value))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
     }
 
     /**
