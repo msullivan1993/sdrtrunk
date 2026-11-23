@@ -19,6 +19,8 @@
 
 package io.github.dsheirer.module.decode.dmr.identifier;
 
+import io.github.dsheirer.identifier.ITimeslotIdentifier;
+import io.github.dsheirer.identifier.Identifier;
 import io.github.dsheirer.identifier.Role;
 import io.github.dsheirer.identifier.talkgroup.TalkgroupIdentifier;
 import io.github.dsheirer.protocol.Protocol;
@@ -26,10 +28,11 @@ import io.github.dsheirer.protocol.Protocol;
 /**
  * DMR Talkgroup identifier
  */
-public class DMRTalkgroup extends TalkgroupIdentifier
+public class DMRTalkgroup extends TalkgroupIdentifier implements ITimeslotIdentifier
 {
     private boolean mCompressed = false;
     private int mOriginalValue;
+    private int mTimeslot = 0;
 
     /**
      * Constructs an instance
@@ -56,6 +59,34 @@ public class DMRTalkgroup extends TalkgroupIdentifier
     public Protocol getProtocol()
     {
         return Protocol.DMR;
+    }
+
+    /**
+     * Timeslot the talkgroup was decoded on, or 0 when unknown.  Used to match aliases that are limited to a timeslot.
+     */
+    @Override
+    public int getTimeslot()
+    {
+        return mTimeslot;
+    }
+
+    @Override
+    public Identifier withTimeslot(int timeslot)
+    {
+        if(timeslot == mTimeslot)
+        {
+            return this;
+        }
+
+        DMRTalkgroup copy = new DMRTalkgroup(mOriginalValue, getRole());
+
+        if(mCompressed)
+        {
+            copy.setCompressed(true);
+        }
+
+        copy.mTimeslot = timeslot;
+        return copy;
     }
 
     @Override

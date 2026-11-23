@@ -32,11 +32,13 @@ import java.util.List;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import javafx.geometry.HPos;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TextFormatter;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
+import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -51,9 +53,12 @@ public class TalkgroupEditor extends IdentifierEditor<Talkgroup>
     private Label mProtocolLabel;
     private Label mFormatLabel;
     private TextField mTalkgroupField;
+    private Label mTimeslotLabel;
+    private ComboBox<Integer> mTimeslotComboBox;
     private TextFormatter<Integer> mIntegerTextFormatter;
     private List<TalkgroupDetail> mTalkgroupDetails = new ArrayList<>();
     private TalkgroupValueChangeListener mTalkgroupValueChangeListener = new TalkgroupValueChangeListener();
+    private boolean mUpdatingTimeslot = false;
 
     /**
      * Constructs an instance
@@ -84,6 +89,13 @@ public class TalkgroupEditor extends IdentifierEditor<Talkgroup>
         GridPane.setConstraints(getFormatLabel(), 3, 0);
         gridPane.getChildren().add(getFormatLabel());
 
+        GridPane.setHalignment(getTimeslotLabel(), HPos.RIGHT);
+        GridPane.setConstraints(getTimeslotLabel(), 4, 0);
+        gridPane.getChildren().add(getTimeslotLabel());
+
+        GridPane.setConstraints(getTimeslotComboBox(), 5, 0);
+        gridPane.getChildren().add(getTimeslotComboBox());
+
         getChildren().add(gridPane);
     }
 
@@ -106,6 +118,14 @@ public class TalkgroupEditor extends IdentifierEditor<Talkgroup>
         {
             getTalkgroupField().setText(null);
         }
+
+        //The timeslot selection is only offered for DMR talkgroups
+        boolean dmr = talkgroup != null && talkgroup.getProtocol() == Protocol.DMR;
+        getTimeslotLabel().setVisible(dmr);
+        getTimeslotComboBox().setVisible(dmr);
+        mUpdatingTimeslot = true;
+        getTimeslotComboBox().getSelectionModel().select(Integer.valueOf(dmr ? talkgroup.getTimeslot() : Talkgroup.ANY_TIMESLOT));
+        mUpdatingTimeslot = false;
 
         modifiedProperty().set(false);
     }
@@ -167,6 +187,60 @@ public class TalkgroupEditor extends IdentifierEditor<Talkgroup>
         }
 
         return mFormatLabel;
+    }
+
+    private Label getTimeslotLabel()
+    {
+        if(mTimeslotLabel == null)
+        {
+            mTimeslotLabel = new Label("Timeslot");
+            mTimeslotLabel.setVisible(false);
+        }
+
+        return mTimeslotLabel;
+    }
+
+    /**
+     * Timeslot selection for DMR talkgroups: any timeslot, or timeslot 1 or 2 only.
+     */
+    private ComboBox<Integer> getTimeslotComboBox()
+    {
+        if(mTimeslotComboBox == null)
+        {
+            mTimeslotComboBox = new ComboBox<>();
+            mTimeslotComboBox.getItems().addAll(Talkgroup.ANY_TIMESLOT, 1, 2);
+            mTimeslotComboBox.setConverter(new StringConverter<>()
+            {
+                @Override
+                public String toString(Integer timeslot)
+                {
+                    if(timeslot == null || timeslot == Talkgroup.ANY_TIMESLOT)
+                    {
+                        return "Any Slot";
+                    }
+
+                    return "Slot " + timeslot + " Only";
+                }
+
+                @Override
+                public Integer fromString(String string)
+                {
+                    return null;
+                }
+            });
+            mTimeslotComboBox.setTooltip(new Tooltip("Limit this alias to a DMR timeslot, e.g. when a conventional " +
+                "repeater uses the same talkgroup on both timeslots.  Use Any Slot for trunked DMR systems."));
+            mTimeslotComboBox.setVisible(false);
+            mTimeslotComboBox.getSelectionModel().selectedItemProperty().addListener((observable, oldValue, newValue) -> {
+                if(!mUpdatingTimeslot && getItem() != null && newValue != null)
+                {
+                    getItem().setTimeslot(newValue);
+                    modifiedProperty().set(true);
+                }
+            });
+        }
+
+        return mTimeslotComboBox;
     }
 
     private Label getProtocolLabel()
