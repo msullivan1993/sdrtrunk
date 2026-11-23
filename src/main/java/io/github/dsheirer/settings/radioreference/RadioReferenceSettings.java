@@ -43,6 +43,8 @@ public class RadioReferenceSettings extends AbstractSettings
     public static final boolean DEFAULT_ENCRYPTED_TALKGROUP_DO_NOT_MONITOR = true;
     public static final AliasListUpdateInterval DEFAULT_ALIAS_LIST_UPDATE_INTERVAL = AliasListUpdateInterval.DAILY;
     public static final boolean DEFAULT_CREATE_AND_SHOW_CHANNEL_EDITOR = true;
+    public static final boolean DEFAULT_CONVENTIONAL_OWN_ALIAS_LIST = false;
+    public static final boolean DEFAULT_CONVENTIONAL_DEFAULT_TALKGROUP_WARNING = true;
     private final static Logger mLog = LoggerFactory.getLogger(RadioReferenceSettings.class);
     public static final int INVALID_ID = -1;
 
@@ -54,6 +56,8 @@ public class RadioReferenceSettings extends AbstractSettings
     private Boolean mShowChannelEditorState;
     private Boolean mShowChannelEditorCounty;
     private Boolean mEncryptedTalkgroupImport;
+    private Boolean mConventionalOwnAliasList;
+    private Boolean mConventionalDefaultTalkgroupWarning;
     private Boolean mCreateAndShowChannelEditor;
     private AliasListUpdateInterval mAliasListUpdateInterval;
     private int mPreferredCountryId = INVALID_ID;
@@ -476,6 +480,61 @@ public class RadioReferenceSettings extends AbstractSettings
         mEncryptedTalkgroupImport = doNotMonitor;
         Setting.RADIO_REFERENCE_ENCRYPTED_TALKGROUP_DO_NOT_MONITOR.putBoolean(doNotMonitor);
         notifySettingsUpdated();
+    }
+
+    /**
+     * Indicates if P25 and NXDN conventional channels imported from Radio Reference each get their own alias list,
+     * named from the channel name.
+     */
+    public boolean isConventionalOwnAliasList()
+    {
+        if(mConventionalOwnAliasList == null)
+        {
+            mConventionalOwnAliasList = Setting.RADIO_REFERENCE_CONVENTIONAL_OWN_ALIAS_LIST.getBoolean(DEFAULT_CONVENTIONAL_OWN_ALIAS_LIST);
+        }
+
+        return mConventionalOwnAliasList;
+    }
+
+    /**
+     * Sets if P25 and NXDN conventional channels imported from Radio Reference each get their own alias list.
+     */
+    public void setConventionalOwnAliasList(boolean ownAliasList)
+    {
+        if(isConventionalOwnAliasList() != ownAliasList)
+        {
+            mConventionalOwnAliasList = ownAliasList;
+            Setting.RADIO_REFERENCE_CONVENTIONAL_OWN_ALIAS_LIST.putBoolean(ownAliasList);
+            notifySettingsUpdated();
+        }
+    }
+
+    /**
+     * Indicates if the user is warned when importing a P25 or NXDN conventional channel with a talkgroup other than
+     * the conventional default (P25 1, NXDN 0).
+     */
+    public boolean isConventionalDefaultTalkgroupWarning()
+    {
+        if(mConventionalDefaultTalkgroupWarning == null)
+        {
+            mConventionalDefaultTalkgroupWarning = Setting.RADIO_REFERENCE_CONVENTIONAL_DEFAULT_TALKGROUP_WARNING
+                .getBoolean(DEFAULT_CONVENTIONAL_DEFAULT_TALKGROUP_WARNING);
+        }
+
+        return mConventionalDefaultTalkgroupWarning;
+    }
+
+    /**
+     * Sets if the user is warned about non-default P25 and NXDN conventional talkgroups at import.
+     */
+    public void setConventionalDefaultTalkgroupWarning(boolean warn)
+    {
+        if(isConventionalDefaultTalkgroupWarning() != warn)
+        {
+            mConventionalDefaultTalkgroupWarning = warn;
+            Setting.RADIO_REFERENCE_CONVENTIONAL_DEFAULT_TALKGROUP_WARNING.putBoolean(warn);
+            notifySettingsUpdated();
+        }
     }
 
 

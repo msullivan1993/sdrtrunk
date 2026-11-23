@@ -167,6 +167,27 @@ public class RadioReferenceSettingsPage extends SettingsPage
             .defaultValue(siteChannel.selectedProperty(), RadioReferenceSettings.DEFAULT_CREATE_AND_SHOW_CHANNEL_EDITOR,
                 siteChannel::setSelected);
 
+        ToggleSwitch ownAliasList = new ToggleSwitch();
+        ownAliasList.setSelected(mRadioReferenceSettings.isConventionalOwnAliasList());
+        ownAliasList.selectedProperty().addListener((observable, oldValue, selected) ->
+            mRadioReferenceSettings.setConventionalOwnAliasList(selected));
+        imports.addRow("Give each P25/NXDN conventional channel its own alias list", ownAliasList)
+            .defaultValue(ownAliasList.selectedProperty(), RadioReferenceSettings.DEFAULT_CONVENTIONAL_OWN_ALIAS_LIST,
+                ownAliasList::setSelected)
+            .help("P25 and NXDN conventional channels nearly all use the same talkgroup (P25 1, NXDN 0), so aliases " +
+                "can only tell channels apart when each channel has its own alias list.  When enabled, an agency " +
+                "frequency import creates an alias list named from the channel name.");
+
+        ToggleSwitch defaultTalkgroupWarning = new ToggleSwitch();
+        defaultTalkgroupWarning.setSelected(mRadioReferenceSettings.isConventionalDefaultTalkgroupWarning());
+        defaultTalkgroupWarning.selectedProperty().addListener((observable, oldValue, selected) ->
+            mRadioReferenceSettings.setConventionalDefaultTalkgroupWarning(selected));
+        imports.addRow("Warn when a P25/NXDN conventional talkgroup isn't the default", defaultTalkgroupWarning)
+            .defaultValue(defaultTalkgroupWarning.selectedProperty(),
+                RadioReferenceSettings.DEFAULT_CONVENTIONAL_DEFAULT_TALKGROUP_WARNING, defaultTalkgroupWarning::setSelected)
+            .help("The talkgroup on a digital conventional channel is decoded off the air, so an alias on any other " +
+                "talkgroup won't match.  Use Stream As TG to keep conventional channels apart when streaming.");
+
         imports.addHelp("Go to the channel editor after creating a channel from an agency frequency:");
         addAgencyRow(imports, "Nationwide agencies", Level.NATIONAL);
         addAgencyRow(imports, "State agencies", Level.STATE);

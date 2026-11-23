@@ -24,6 +24,7 @@ import io.github.dsheirer.alias.id.AliasID;
 import io.github.dsheirer.alias.id.broadcast.BroadcastChannel;
 import io.github.dsheirer.alias.id.talkgroup.StreamAsTalkgroup;
 import io.github.dsheirer.alias.id.talkgroup.Talkgroup;
+import io.github.dsheirer.alias.id.talkgroup.TalkgroupFormat;
 import io.github.dsheirer.alias.id.talkgroup.TalkgroupRange;
 import io.github.dsheirer.protocol.Protocol;
 import java.util.Collection;
@@ -44,6 +45,11 @@ public final class RadioReferenceAliasSupport
      * P25 conventional repeaters almost universally use the default talkgroup 1
      */
     public static final int P25_CONVENTIONAL_DEFAULT_TALKGROUP = 1;
+
+    /**
+     * NXDN conventional systems almost universally use talkgroup 0
+     */
+    public static final int NXDN_CONVENTIONAL_DEFAULT_TALKGROUP = 0;
 
     /**
      * Maximum alias list name length, matching the alias editor's new/rename dialogs
@@ -72,6 +78,7 @@ public final class RadioReferenceAliasSupport
             case FM, FMN -> Protocol.NBFM;
             case AM -> Protocol.AM;
             case APCO25 -> Protocol.APCO25;
+            case NXDN48, NXDN96 -> Protocol.NXDN;
             default -> null;
         };
     }
@@ -85,14 +92,44 @@ public final class RadioReferenceAliasSupport
     }
 
     /**
-     * Suggested talkgroup for a new channel: the next free value in the alias list for analog channels, or the P25
-     * conventional default of 1.
+     * Indicates if the talkgroup is decoded off the air (digital conventional) rather than assigned by the channel.
+     * These channels nearly always use a fixed default talkgroup, so each channel needs its own alias list and a
+     * Stream As talkgroup to keep channels apart when streaming.
      */
-    public static int getSuggestedTalkgroup(Protocol protocol, Collection<Alias> aliases)
+    public static boolean isDecodedTalkgroup(Protocol protocol)
+    {
+        return protocol == Protocol.APCO25 || protocol == Protocol.NXDN;
+    }
+
+    /**
+     * Default conventional talkgroup for digital protocols: 1 for P25 and 0 for NXDN.
+     * @return default talkgroup or null for protocols without a decoded default
+     */
+    public static Integer getConventionalDefaultTalkgroup(Protocol protocol)
     {
         if(protocol == Protocol.APCO25)
         {
             return P25_CONVENTIONAL_DEFAULT_TALKGROUP;
+        }
+        else if(protocol == Protocol.NXDN)
+        {
+            return NXDN_CONVENTIONAL_DEFAULT_TALKGROUP;
+        }
+
+        return null;
+    }
+
+    /**
+     * Suggested talkgroup for a new channel: the next free value in the alias list for analog channels, or the
+     * conventional default (P25 1, NXDN 0) for digital channels.
+     */
+    public static int getSuggestedTalkgroup(Protocol protocol, Collection<Alias> aliases)
+    {
+        Integer conventionalDefault = getConventionalDefaultTalkgroup(protocol);
+
+        if(conventionalDefault != null)
+        {
+            return conventionalDefault;
         }
 
         return getNextFreeTalkgroup(protocol, aliases);
@@ -257,6 +294,33 @@ public final class RadioReferenceAliasSupport
         return candidate;
     }
 
+    /**
+     * Alias list name for a channel that gets its own alias list: the desired name (trimmed and limited to 25
+     * characters), or the next numbered name when that list already exists (Mason Fire -> Mason Fire2).
+     * @return unique alias list name or null if the desired name is blank
+     */
+    public static String getUniqueAliasListName(String desired, Collection<String> existing)
+    {
+        if(desired == null || desired.isBlank())
+        {
+            return null;
+        }
+
+        String name = desired.trim();
+
+        if(name.length() > MAX_ALIAS_LIST_NAME_LENGTH)
+        {
+            name = name.substring(0, MAX_ALIAS_LIST_NAME_LENGTH).trim();
+        }
+
+        if(!containsIgnoreCase(existing, name))
+        {
+            return name;
+        }
+
+        return getNextAliasListName(name, existing);
+    }
+
     private static boolean containsIgnoreCase(Collection<String> names, String value)
     {
         if(names != null)
@@ -271,6 +335,55 @@ public final class RadioReferenceAliasSupport
         }
 
         return false;
+    }
+
+    /**
+     * Parses a talkgroup value from user text using the protocol's valid talkgroup range (NXDN and P25 allow 0).
+     * @return value or null if the text is empty or invalid
+     */
+    public static Integer parseTalkgroup(String text, Protocol protocol)
+    {
+        if(protocol == null)
+        {
+            return parseTalkgroup(text);
+        }
+
+        if(text == null || text.isBlank())
+        {
+            return null;
+        }
+
+        try
+        {
+            int value = Integer.parseInt(text.trim());
+            TalkgroupFormat format = TalkgroupFormat.get(protocol);
+
+            if(format.getMinimumValidValue() <= value && value <= Math.min(format.getMaximumValidValue(), MAX_TALKGROUP))
+            {
+                return value;
+            }
+        }
+        catch(NumberFormatException nfe)
+        {
+            //Invalid value
+        }
+
+        return null;
+    }
+
+    /**
+     * Valid talkgroup range description for the protocol, for error messages
+     */
+    public static String getTalkgroupRange(Protocol protocol)
+    {
+        if(protocol == null)
+        {
+            return "1 to 65,535";
+        }
+
+        TalkgroupFormat format = TalkgroupFormat.get(protocol);
+        return String.format("%,d to %,d", format.getMinimumValidValue(),
+            Math.min(format.getMaximumValidValue(), MAX_TALKGROUP));
     }
 
     /**

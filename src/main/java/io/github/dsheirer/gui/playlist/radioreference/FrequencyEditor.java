@@ -121,7 +121,14 @@ public class FrequencyEditor extends VBox
     /**
      * User choices when the talkgroup is already aliased in the selected alias list
      */
-    private enum ExistingAliasChoice {NEW_ALIAS_LIST, CREATE_ANYWAY, CHANNEL_ONLY, CANCEL}
+    private enum ExistingAliasChoice {NEW_NUMBERED_LIST, NEW_CHANNEL_LIST, CREATE_ANYWAY, CHANNEL_ONLY, CANCEL}
+
+    /**
+     * User choices when a P25 or NXDN conventional talkgroup isn't the conventional default
+     */
+    private enum DefaultTalkgroupChoice {USE_DEFAULT, KEEP, CANCEL}
+
+    private CheckBox mOwnAliasListCheckBox;
 
     public FrequencyEditor(Settings settings, RadioReference radioReference,
                            PlaylistManager playlistManager, Level level)
@@ -201,6 +208,9 @@ public class FrequencyEditor extends VBox
         GridPane.setHgrow(aliasListBox, Priority.ALWAYS);
         GridPane.setConstraints(aliasListBox, 1, row);
         gridPane.getChildren().add(aliasListBox);
+
+        GridPane.setConstraints(getOwnAliasListCheckBox(), 1, ++row);
+        gridPane.getChildren().add(getOwnAliasListCheckBox());
 
         Label systemLabel = new Label("System");
         systemLabel.setLabelFor(getSystemTextField());
@@ -503,127 +513,232 @@ public class FrequencyEditor extends VBox
         {
             mCreateButton = new Button("Create");
             mCreateButton.setDisable(true);
-            mCreateButton.setOnAction(event -> {
-                Channel channel = createChannel(mModeDecoderType, mFrequency, getSystemTextField().getText(),
-                    getSiteTextField().getText(), getNameTextField().getText(), getToneTextField().getText());
-
-                if(channel != null)
-                {
-                    Alias alias = null;
-                    String aliasListName = getSelectedAliasListName();
-                    Protocol protocol = RadioReferenceAliasSupport.getAliasProtocol(mModeDecoderType);
-                    boolean channelAssigned = RadioReferenceAliasSupport.isChannelAssignedTalkgroup(protocol);
-                    boolean createAlias = aliasListName != null && protocol != null && getCreateAliasCheckBox().isSelected();
-                    Integer talkgroup = RadioReferenceAliasSupport.parseTalkgroup(getTalkgroupTextField().getText());
-
-                    if(channelAssigned || createAlias)
-                    {
-                        if(talkgroup == null)
-                        {
-                            showError("Invalid Talkgroup", "Talkgroup must be a value between 1 and 65,535.");
-                            return;
-                        }
-
-                        if(channelAssigned && channel.getDecodeConfiguration() instanceof DecodeConfigAnalog analog)
-                        {
-                            analog.setTalkgroup(talkgroup);
-                        }
-                    }
-
-                    if(aliasListName != null)
-                    {
-                        channel.setAliasListName(aliasListName);
-                    }
-
-                    if(createAlias)
-                    {
-                        String streamAsText = getStreamAsTalkgroupTextField().getText();
-                        Integer streamAs = RadioReferenceAliasSupport.parseTalkgroup(streamAsText);
-
-                        if(streamAsText != null && !streamAsText.isBlank() && streamAs == null)
-                        {
-                            showError("Invalid Stream As Talkgroup", "Stream As Talkgroup must be blank or a value between 1 and 65,535.");
-                            return;
-                        }
-
-                        String aliasName = getAliasNameTextField().getText();
-                        if(aliasName == null || aliasName.isBlank())
-                        {
-                            aliasName = getNameTextField().getText();
-                        }
-
-                        boolean create = true;
-                        Alias existing = RadioReferenceAliasSupport.findExisting(protocol, talkgroup,
-                            getAliasListAliases(aliasListName));
-
-                        if(existing != null)
-                        {
-                            String newListName = RadioReferenceAliasSupport.getNextAliasListName(aliasListName,
-                                mPlaylistManager.getAliasModel().aliasListNames());
-                            ExistingAliasChoice choice = confirmExisting(protocol, talkgroup, existing, aliasListName,
-                                newListName);
-
-                            switch(choice)
-                            {
-                                case CANCEL:
-                                    return;
-                                case CHANNEL_ONLY:
-                                    create = false;
-                                    break;
-                                case NEW_ALIAS_LIST:
-                                    mPlaylistManager.getAliasModel().addAliasList(newListName);
-                                    refreshAliasListNames();
-                                    getAliasListComboBox().getSelectionModel().select(newListName);
-                                    aliasListName = newListName;
-                                    channel.setAliasListName(newListName);
-                                    break;
-                                default:
-                                    break;
-                            }
-                        }
-
-                        if(create)
-                        {
-                            alias = RadioReferenceAliasSupport.createAlias(aliasName, aliasListName,
-                                getAliasGroupTextField().getText(), protocol, talkgroup, streamAs,
-                                getSelectedBroadcastChannel());
-                        }
-                    }
-
-                    getCreateButton().setDisable(true);
-                    mPlaylistManager.getChannelModel().addChannel(channel);
-
-                    if(alias != null)
-                    {
-                        mPlaylistManager.getAliasModel().addAlias(alias);
-                    }
-
-                    updateAliasControls(true);
-
-                    StringBuilder status = new StringBuilder();
-                    status.append("Channel created: ").append(channel.getName());
-
-                    if(alias != null)
-                    {
-                        status.append("\nAlias '").append(alias.getName()).append("' (TG ").append(talkgroup)
-                            .append(") added to alias list '").append(aliasListName).append("'");
-                    }
-                    else if(aliasListName != null)
-                    {
-                        status.append("\nAlias list '").append(aliasListName).append("' assigned");
-                    }
-
-                    showStatus(status.toString());
-
-                    if(getShowCreatedChannelCheckBox().selectedProperty().get())
-                    {
-                        MyEventBus.getGlobalEventBus().post(new ViewChannelRequest(channel));
-                    }
-                }
-            });
+            mCreateButton.setOnAction(event -> createChannelAndAlias());
         }
 
         return mCreateButton;
+    }
+
+    /**
+     * Creates the channel configuration and, when an alias list applies, assigns the alias list to the channel and
+     * creates the talkgroup alias.
+     */
+    private void createChannelAndAlias()
+    {
+        boolean supported = mModeDecoderType != null && mModeDecoderType.hasDecoderType() && mFrequency > 0;
+        Protocol protocol = supported ? RadioReferenceAliasSupport.getAliasProtocol(mModeDecoderType) : null;
+        boolean channelAssigned = RadioReferenceAliasSupport.isChannelAssignedTalkgroup(protocol);
+        boolean ownList = isOwnAliasList(protocol);
+        String aliasListName = ownList ? getOwnAliasListName() : getSelectedAliasListName();
+        boolean createAlias = aliasListName != null && protocol != null && getCreateAliasCheckBox().isSelected();
+        Integer talkgroup = RadioReferenceAliasSupport.parseTalkgroup(getTalkgroupTextField().getText(), protocol);
+
+        if((channelAssigned || createAlias) && talkgroup == null)
+        {
+            showError("Invalid Talkgroup", "Talkgroup must be a value between " +
+                RadioReferenceAliasSupport.getTalkgroupRange(protocol) + ".");
+            return;
+        }
+
+        Integer streamAs = null;
+
+        if(createAlias)
+        {
+            String streamAsText = getStreamAsTalkgroupTextField().getText();
+            streamAs = RadioReferenceAliasSupport.parseTalkgroup(streamAsText);
+
+            if(streamAsText != null && !streamAsText.isBlank() && streamAs == null)
+            {
+                showError("Invalid Stream As Talkgroup", "Stream As Talkgroup must be blank or a value between 1 and 65,535.");
+                return;
+            }
+
+            Integer conventionalDefault = RadioReferenceAliasSupport.getConventionalDefaultTalkgroup(protocol);
+
+            if(conventionalDefault != null && talkgroup.intValue() != conventionalDefault &&
+                mSettings.getRadioReferenceSettings().isConventionalDefaultTalkgroupWarning())
+            {
+                switch(confirmNonDefaultTalkgroup(protocol, talkgroup, conventionalDefault, streamAs))
+                {
+                    case CANCEL:
+                        return;
+                    case USE_DEFAULT:
+                        if(streamAs == null && talkgroup >= RadioReferenceAliasSupport.MIN_TALKGROUP)
+                        {
+                            streamAs = talkgroup;
+                            getStreamAsTalkgroupTextField().setText(String.valueOf(streamAs));
+                        }
+                        talkgroup = conventionalDefault;
+                        getTalkgroupTextField().setText(String.valueOf(talkgroup));
+                        break;
+                    default:
+                        break;
+                }
+            }
+
+            if(!ownList)
+            {
+                Alias existing = RadioReferenceAliasSupport.findExisting(protocol, talkgroup,
+                    getAliasListAliases(aliasListName));
+
+                if(existing != null)
+                {
+                    List<String> names = mPlaylistManager.getAliasModel().aliasListNames();
+                    String numberedListName = RadioReferenceAliasSupport.getNextAliasListName(aliasListName, names);
+                    String channelListName = RadioReferenceAliasSupport.getUniqueAliasListName(getOwnAliasListSource(), names);
+
+                    switch(confirmExisting(protocol, talkgroup, existing, aliasListName, numberedListName, channelListName))
+                    {
+                        case CANCEL:
+                            return;
+                        case CHANNEL_ONLY:
+                            createAlias = false;
+                            break;
+                        case NEW_NUMBERED_LIST:
+                            aliasListName = numberedListName;
+                            selectNewAliasList(aliasListName);
+                            break;
+                        case NEW_CHANNEL_LIST:
+                            aliasListName = channelListName;
+                            selectNewAliasList(aliasListName);
+                            break;
+                        default:
+                            break;
+                    }
+                }
+            }
+        }
+
+        Channel channel = createChannel(mModeDecoderType, mFrequency, getSystemTextField().getText(),
+            getSiteTextField().getText(), getNameTextField().getText(), getToneTextField().getText());
+
+        if(channel == null)
+        {
+            return;
+        }
+
+        if(channelAssigned && channel.getDecodeConfiguration() instanceof DecodeConfigAnalog analog)
+        {
+            analog.setTalkgroup(talkgroup);
+        }
+
+        Alias alias = null;
+
+        if(aliasListName != null)
+        {
+            mPlaylistManager.getAliasModel().addAliasList(aliasListName);
+            channel.setAliasListName(aliasListName);
+
+            if(createAlias)
+            {
+                String aliasName = getAliasNameTextField().getText();
+
+                if(aliasName == null || aliasName.isBlank())
+                {
+                    aliasName = getNameTextField().getText();
+                }
+
+                alias = RadioReferenceAliasSupport.createAlias(aliasName, aliasListName,
+                    getAliasGroupTextField().getText(), protocol, talkgroup, streamAs, getSelectedBroadcastChannel());
+            }
+        }
+
+        getCreateButton().setDisable(true);
+        mPlaylistManager.getChannelModel().addChannel(channel);
+
+        if(alias != null)
+        {
+            mPlaylistManager.getAliasModel().addAlias(alias);
+        }
+
+        updateAliasControls(true);
+
+        StringBuilder status = new StringBuilder();
+        status.append("Channel created: ").append(channel.getName());
+
+        if(alias != null)
+        {
+            status.append("\nAlias '").append(alias.getName()).append("' (TG ").append(talkgroup);
+
+            if(streamAs != null)
+            {
+                status.append(", Stream As ").append(streamAs);
+            }
+
+            status.append(") added to alias list '").append(aliasListName).append("'");
+        }
+        else if(aliasListName != null)
+        {
+            status.append("\nAlias list '").append(aliasListName).append("' assigned");
+        }
+
+        showStatus(status.toString());
+
+        if(getShowCreatedChannelCheckBox().selectedProperty().get())
+        {
+            MyEventBus.getGlobalEventBus().post(new ViewChannelRequest(channel));
+        }
+    }
+
+    /**
+     * Adds a new alias list and selects it so that the next import continues in that list.
+     */
+    private void selectNewAliasList(String aliasListName)
+    {
+        mPlaylistManager.getAliasModel().addAliasList(aliasListName);
+        refreshAliasListNames();
+        getAliasListComboBox().getSelectionModel().select(aliasListName);
+    }
+
+    /**
+     * Indicates if the channel gets its own alias list: P25/NXDN conventional with the option enabled.
+     */
+    private boolean isOwnAliasList(Protocol protocol)
+    {
+        return RadioReferenceAliasSupport.isDecodedTalkgroup(protocol) && getOwnAliasListCheckBox().isSelected();
+    }
+
+    /**
+     * Name used for a channel's own alias list: the channel name, or the alias name when the channel name is blank.
+     */
+    private String getOwnAliasListSource()
+    {
+        String name = getNameTextField().getText();
+
+        if(name == null || name.isBlank())
+        {
+            name = getAliasNameTextField().getText();
+        }
+
+        return name;
+    }
+
+    /**
+     * Unique alias list name for a channel that gets its own alias list
+     */
+    private String getOwnAliasListName()
+    {
+        return RadioReferenceAliasSupport.getUniqueAliasListName(getOwnAliasListSource(),
+            mPlaylistManager.getAliasModel().aliasListNames());
+    }
+
+    private CheckBox getOwnAliasListCheckBox()
+    {
+        if(mOwnAliasListCheckBox == null)
+        {
+            mOwnAliasListCheckBox = new CheckBox("Own alias list for this channel (named from channel name)");
+            mOwnAliasListCheckBox.setTooltip(new Tooltip("P25 and NXDN conventional channels nearly all use the same " +
+                "talkgroup, so each channel needs its own alias list for its alias and streaming to match."));
+            mOwnAliasListCheckBox.setSelected(mSettings.getRadioReferenceSettings().isConventionalOwnAliasList());
+            mOwnAliasListCheckBox.setVisible(false);
+            mOwnAliasListCheckBox.setManaged(false);
+            mOwnAliasListCheckBox.selectedProperty().addListener((observable, oldValue, selected) -> {
+                mSettings.getRadioReferenceSettings().setConventionalOwnAliasList(selected);
+                updateAliasControls(false);
+            });
+        }
+
+        return mOwnAliasListCheckBox;
     }
 
     /**
@@ -672,6 +787,7 @@ public class FrequencyEditor extends VBox
             mNameTextField = new TextField();
             mNameTextField.setMaxWidth(Double.MAX_VALUE);
             mNameTextField.setDisable(true);
+            mNameTextField.textProperty().addListener((observable, oldValue, newValue) -> updateAliasWarning());
         }
 
         return mNameTextField;
@@ -846,7 +962,7 @@ public class FrequencyEditor extends VBox
             mTalkgroupTextField = new TextField();
             mTalkgroupTextField.setMaxWidth(Double.MAX_VALUE);
             mTalkgroupTextField.setDisable(true);
-            mTalkgroupTextField.setTooltip(new Tooltip("Analog: talkgroup assigned to the channel.  P25: decoded talkgroup to alias (default 1)."));
+            mTalkgroupTextField.setTooltip(new Tooltip("Analog: talkgroup assigned to the channel.  P25/NXDN: decoded talkgroup to alias (conventional default P25 1, NXDN 0)."));
             mTalkgroupTextField.textProperty().addListener((observable, oldValue, newValue) -> updateAliasWarning());
         }
 
@@ -904,6 +1020,7 @@ public class FrequencyEditor extends VBox
             refreshBroadcastChannels();
             mBroadcastChannelComboBox.getSelectionModel().select(NO_BROADCAST_CHANNEL);
             mBroadcastChannelComboBox.setOnShowing(event -> refreshBroadcastChannels());
+            mBroadcastChannelComboBox.setOnAction(event -> updateAliasWarning());
         }
 
         return mBroadcastChannelComboBox;
@@ -969,14 +1086,20 @@ public class FrequencyEditor extends VBox
      */
     private void updateAliasControls(boolean resetTalkgroup)
     {
-        String aliasListName = getSelectedAliasListName();
-        boolean hasList = aliasListName != null;
+        String selectedListName = getSelectedAliasListName();
         boolean supported = mModeDecoderType != null && mModeDecoderType.hasDecoderType() && mFrequency > 0;
         Protocol protocol = supported ? RadioReferenceAliasSupport.getAliasProtocol(mModeDecoderType) : null;
+        boolean decoded = RadioReferenceAliasSupport.isDecodedTalkgroup(protocol);
+        boolean ownList = isOwnAliasList(protocol);
+        boolean hasList = ownList || selectedListName != null;
         boolean channelAssigned = RadioReferenceAliasSupport.isChannelAssignedTalkgroup(protocol);
         boolean createAlias = hasList && protocol != null && getCreateAliasCheckBox().isSelected();
 
-        getRenameAliasListButton().setDisable(!hasList);
+        getOwnAliasListCheckBox().setVisible(decoded);
+        getOwnAliasListCheckBox().setManaged(decoded);
+        getAliasListComboBox().setDisable(ownList);
+        getNewAliasListButton().setDisable(ownList);
+        getRenameAliasListButton().setDisable(ownList || selectedListName == null);
         getCreateAliasCheckBox().setDisable(!hasList || protocol == null);
         getTalkgroupTextField().setDisable(protocol == null || !(channelAssigned || createAlias));
         getAliasNameTextField().setDisable(!createAlias);
@@ -988,7 +1111,8 @@ public class FrequencyEditor extends VBox
         {
             if(protocol != null)
             {
-                int suggested = RadioReferenceAliasSupport.getSuggestedTalkgroup(protocol, getAliasListAliases(aliasListName));
+                int suggested = RadioReferenceAliasSupport.getSuggestedTalkgroup(protocol,
+                    ownList ? List.<Alias>of() : getAliasListAliases(selectedListName));
                 getTalkgroupTextField().setText(String.valueOf(suggested));
             }
             else
@@ -1001,8 +1125,9 @@ public class FrequencyEditor extends VBox
     }
 
     /**
-     * Shows a warning when the talkgroup is already aliased in the selected alias list or the stream-as talkgroup is
-     * already in use, and a note for channel types that are aliased by hand.
+     * Shows alias notes and warnings: the alias list a channel's own list will get, a talkgroup that's already aliased
+     * in the alias list, a non-default P25/NXDN conventional talkgroup, a P25/NXDN conventional alias that streams
+     * without a Stream As talkgroup, and a Stream As talkgroup that's already used.
      */
     private void updateAliasWarning()
     {
@@ -1011,48 +1136,69 @@ public class FrequencyEditor extends VBox
             return;
         }
 
-        StringBuilder sb = new StringBuilder();
-        String aliasListName = getSelectedAliasListName();
+        List<String> lines = new ArrayList<>();
         boolean supported = mModeDecoderType != null && mModeDecoderType.hasDecoderType() && mFrequency > 0;
         Protocol protocol = supported ? RadioReferenceAliasSupport.getAliasProtocol(mModeDecoderType) : null;
+        boolean ownList = isOwnAliasList(protocol);
+        String aliasListName = ownList ? getOwnAliasListName() : getSelectedAliasListName();
 
         if(supported && aliasListName != null)
         {
             if(protocol == null)
             {
-                sb.append("Alias list will be assigned to the channel. Create aliases for ")
-                    .append(mModeDecoderType.getDecoderType().getDisplayString())
-                    .append(" identifiers in the alias editor.");
+                lines.add("Alias list will be assigned to the channel. Create aliases for " +
+                    mModeDecoderType.getDecoderType().getDisplayString() + " identifiers in the alias editor.");
+            }
+            else if(ownList && !getCreateAliasCheckBox().isSelected())
+            {
+                lines.add("Creates alias list '" + aliasListName + "' for this channel.");
             }
             else if(getCreateAliasCheckBox().isSelected())
             {
-                Integer talkgroup = RadioReferenceAliasSupport.parseTalkgroup(getTalkgroupTextField().getText());
+                String protocolLabel = protocol == Protocol.APCO25 ? "P25" : protocol.toString();
+                Integer talkgroup = RadioReferenceAliasSupport.parseTalkgroup(getTalkgroupTextField().getText(), protocol);
+                Integer conventionalDefault = RadioReferenceAliasSupport.getConventionalDefaultTalkgroup(protocol);
+
+                if(ownList)
+                {
+                    lines.add("Creates alias list '" + aliasListName + "' for this channel.");
+                }
 
                 if(talkgroup == null)
                 {
-                    sb.append("Talkgroup must be a value between 1 and 65,535.");
+                    lines.add("Talkgroup must be a value between " + RadioReferenceAliasSupport.getTalkgroupRange(protocol) + ".");
                 }
                 else
                 {
-                    Alias existing = RadioReferenceAliasSupport.findExisting(protocol, talkgroup,
-                        getAliasListAliases(aliasListName));
-
-                    if(existing != null)
+                    if(!ownList)
                     {
-                        sb.append("Talkgroup ").append(talkgroup).append(" is already aliased as '")
-                            .append(existing.getName()).append("' in this alias list.");
+                        Alias existing = RadioReferenceAliasSupport.findExisting(protocol, talkgroup,
+                            getAliasListAliases(aliasListName));
 
-                        if(protocol == Protocol.APCO25)
+                        if(existing != null)
                         {
-                            sb.append(" Create will offer a new alias list '")
-                                .append(RadioReferenceAliasSupport.getNextAliasListName(aliasListName,
-                                    mPlaylistManager.getAliasModel().aliasListNames()))
-                                .append("' for this channel.");
+                            lines.add("Talkgroup " + talkgroup + " is already aliased as '" + existing.getName() +
+                                "' in this alias list. Create will offer a new alias list for this channel.");
                         }
+                    }
+
+                    if(conventionalDefault != null && talkgroup.intValue() != conventionalDefault &&
+                        mSettings.getRadioReferenceSettings().isConventionalDefaultTalkgroupWarning())
+                    {
+                        lines.add("TG " + talkgroup + " isn't the " + protocolLabel + " conventional default (" +
+                            conventionalDefault + "). It's decoded off the air, so the alias only matches if the " +
+                            "radios transmit TG " + talkgroup + ". Use Stream As TG to keep channels apart when streaming.");
                     }
                 }
 
                 Integer streamAs = RadioReferenceAliasSupport.parseTalkgroup(getStreamAsTalkgroupTextField().getText());
+                String broadcastChannel = getSelectedBroadcastChannel();
+
+                if(conventionalDefault != null && streamAs == null && broadcastChannel != null)
+                {
+                    lines.add("Other " + protocolLabel + " conventional channels streaming to '" + broadcastChannel +
+                        "' will share TG " + conventionalDefault + ". Set Stream As TG to keep them apart.");
+                }
 
                 if(streamAs != null)
                 {
@@ -1061,20 +1207,14 @@ public class FrequencyEditor extends VBox
 
                     if(existingStream != null)
                     {
-                        if(!sb.isEmpty())
-                        {
-                            sb.append("\n");
-                        }
-
-                        sb.append("Stream As TG ").append(streamAs).append(" is already used by '")
-                            .append(existingStream.getName()).append("' (").append(existingStream.getAliasListName())
-                            .append(").");
+                        lines.add("Stream As TG " + streamAs + " is already used by '" + existingStream.getName() +
+                            "' (" + existingStream.getAliasListName() + ").");
                     }
                 }
             }
         }
 
-        getAliasWarningLabel().setText(sb.toString());
+        getAliasWarningLabel().setText(String.join("\n", lines));
     }
 
     private void showError(String title, String message)
@@ -1110,42 +1250,62 @@ public class FrequencyEditor extends VBox
 
     /**
      * Asks the user how to proceed when the talkgroup is already aliased in the alias list.
+     * @param numberedListName next numbered alias list name (MasonKYSO -> MasonKYSO2)
+     * @param channelListName alias list name from the channel name, or null
      */
     private ExistingAliasChoice confirmExisting(Protocol protocol, int talkgroup, Alias existing, String aliasListName,
-                                                String newAliasListName)
+                                                String numberedListName, String channelListName)
     {
+        boolean offerChannelList = channelListName != null && !channelListName.equalsIgnoreCase(numberedListName);
+
         StringBuilder sb = new StringBuilder();
         sb.append("Talkgroup ").append(talkgroup).append(" is already aliased as '").append(existing.getName())
             .append("' in alias list '").append(aliasListName).append("'.\n\n");
 
-        if(protocol == Protocol.APCO25)
+        if(RadioReferenceAliasSupport.isDecodedTalkgroup(protocol))
         {
-            sb.append("P25 conventional channels almost always use talkgroup 1. Aliases (and the streaming settings ")
-                .append("on them) can only tell these channels apart when each channel has its own alias list.\n\n");
+            String protocolLabel = protocol == Protocol.APCO25 ? "P25" : protocol.toString();
+            sb.append(protocolLabel).append(" conventional channels nearly all use talkgroup ")
+                .append(RadioReferenceAliasSupport.getConventionalDefaultTalkgroup(protocol))
+                .append(". Aliases (and the streaming settings on them) can only tell these channels apart when ")
+                .append("each channel has its own alias list.\n\n");
         }
 
-        sb.append("New Alias List: create alias list '").append(newAliasListName)
-            .append("' and put this channel and its alias in it (recommended).\n")
-            .append("Duplicate Alias: add a second alias for the same talkgroup to '").append(aliasListName)
+        sb.append("'").append(numberedListName).append("': create the next numbered alias list for this channel ")
+            .append("and its alias.\n");
+
+        if(offerChannelList)
+        {
+            sb.append("'").append(channelListName).append("': create an alias list named from the channel name.\n");
+        }
+
+        sb.append("Duplicate Alias: add a second alias for the same talkgroup to '").append(aliasListName)
             .append("' (only one of them will match).\n")
             .append("Channel Only: create the channel in '").append(aliasListName).append("' without an alias.");
 
-        ButtonType newList = new ButtonType("New Alias List", ButtonBar.ButtonData.YES);
+        ButtonType numberedList = new ButtonType("New List '" + numberedListName + "'", ButtonBar.ButtonData.YES);
+        ButtonType channelList = new ButtonType("New List '" + channelListName + "'", ButtonBar.ButtonData.OTHER);
         ButtonType createAnyway = new ButtonType("Duplicate Alias", ButtonBar.ButtonData.OTHER);
         ButtonType channelOnly = new ButtonType("Channel Only", ButtonBar.ButtonData.NO);
-        Alert alert = new Alert(Alert.AlertType.WARNING, sb.toString(), newList, createAnyway, channelOnly,
-            ButtonType.CANCEL);
+
+        Alert alert = offerChannelList ?
+            new Alert(Alert.AlertType.WARNING, sb.toString(), numberedList, channelList, createAnyway, channelOnly, ButtonType.CANCEL) :
+            new Alert(Alert.AlertType.WARNING, sb.toString(), numberedList, createAnyway, channelOnly, ButtonType.CANCEL);
         alert.setTitle("Existing Alias");
         alert.setHeaderText("Talkgroup " + talkgroup + " Already Aliased");
-        alert.getDialogPane().setMinWidth(520);
+        alert.getDialogPane().setMinWidth(680);
         alert.initOwner(getCreateButton().getScene().getWindow());
         Optional<ButtonType> result = alert.showAndWait();
 
         if(result.isPresent())
         {
-            if(result.get() == newList)
+            if(result.get() == numberedList)
             {
-                return ExistingAliasChoice.NEW_ALIAS_LIST;
+                return ExistingAliasChoice.NEW_NUMBERED_LIST;
+            }
+            else if(offerChannelList && result.get() == channelList)
+            {
+                return ExistingAliasChoice.NEW_CHANNEL_LIST;
             }
             else if(result.get() == createAnyway)
             {
@@ -1161,6 +1321,63 @@ public class FrequencyEditor extends VBox
     }
 
     /**
+     * Warns that a P25/NXDN conventional talkgroup isn't the conventional default and offers to use the default with
+     * the entered value as the Stream As talkgroup.  Includes an option to turn the warning off.
+     */
+    private DefaultTalkgroupChoice confirmNonDefaultTalkgroup(Protocol protocol, int talkgroup, int conventionalDefault,
+                                                              Integer streamAs)
+    {
+        String protocolLabel = protocol == Protocol.APCO25 ? "P25" : protocol.toString();
+        boolean moveToStreamAs = streamAs == null && talkgroup >= RadioReferenceAliasSupport.MIN_TALKGROUP;
+
+        String text = "Talkgroup " + talkgroup + " isn't the " + protocolLabel + " conventional default (" +
+            conventionalDefault + ").\n\n" +
+            "On a digital conventional channel the talkgroup is decoded off the air, and nearly every " + protocolLabel +
+            " conventional system uses talkgroup " + conventionalDefault + ". An alias on talkgroup " + talkgroup +
+            " only matches if the radios actually transmit talkgroup " + talkgroup + ". Otherwise the alias never " +
+            "matches, and nothing set on it (streaming, recording, priority) applies.\n\n" +
+            "To keep conventional channels apart when streaming, leave the talkgroup at " + conventionalDefault +
+            " and use Stream As TG instead.";
+
+        Label label = new Label(text);
+        label.setWrapText(true);
+        label.setPrefWidth(560);
+        CheckBox dontWarn = new CheckBox("Don't warn me about conventional default talkgroups");
+        VBox content = new VBox(15, label, dontWarn);
+
+        ButtonType useDefault = new ButtonType(moveToStreamAs ? "Use TG " + conventionalDefault + ", Stream As " +
+            talkgroup : "Use TG " + conventionalDefault, ButtonBar.ButtonData.YES);
+        ButtonType keep = new ButtonType("Keep TG " + talkgroup, ButtonBar.ButtonData.NO);
+        Alert alert = new Alert(Alert.AlertType.WARNING, "", useDefault, keep, ButtonType.CANCEL);
+        alert.setTitle("Conventional Talkgroup");
+        alert.setHeaderText(protocolLabel + " Conventional Talkgroup " + talkgroup);
+        alert.getDialogPane().setContent(content);
+        alert.initOwner(getCreateButton().getScene().getWindow());
+        Optional<ButtonType> result = alert.showAndWait();
+
+        DefaultTalkgroupChoice choice = DefaultTalkgroupChoice.CANCEL;
+
+        if(result.isPresent())
+        {
+            if(result.get() == useDefault)
+            {
+                choice = DefaultTalkgroupChoice.USE_DEFAULT;
+            }
+            else if(result.get() == keep)
+            {
+                choice = DefaultTalkgroupChoice.KEEP;
+            }
+        }
+
+        if(choice != DefaultTalkgroupChoice.CANCEL && dontWarn.isSelected())
+        {
+            mSettings.getRadioReferenceSettings().setConventionalDefaultTalkgroupWarning(false);
+        }
+
+        return choice;
+    }
+
+    /**
      * Follows changes to this setting made on the settings dialog's Radio Reference page
      */
     @Subscribe
@@ -1168,7 +1385,11 @@ public class FrequencyEditor extends VBox
     {
         if(settingsType == SettingsType.RADIO_REFERENCE)
         {
-            Platform.runLater(() -> getShowCreatedChannelCheckBox().setSelected(mSettings.getRadioReferenceSettings().getShowChannelEditor(mLevel)));
+            Platform.runLater(() -> {
+                getShowCreatedChannelCheckBox().setSelected(mSettings.getRadioReferenceSettings().getShowChannelEditor(mLevel));
+                getOwnAliasListCheckBox().setSelected(mSettings.getRadioReferenceSettings().isConventionalOwnAliasList());
+                updateAliasWarning();
+            });
         }
     }
 }
