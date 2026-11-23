@@ -52,7 +52,8 @@ public class RadioReferenceAliasSupportTest
         assertEquals(Protocol.AM, RadioReferenceAliasSupport.getAliasProtocol(ModeDecoderType.AM));
         assertEquals(Protocol.APCO25, RadioReferenceAliasSupport.getAliasProtocol(ModeDecoderType.APCO25));
         assertNull(RadioReferenceAliasSupport.getAliasProtocol(ModeDecoderType.DMR));
-        assertNull(RadioReferenceAliasSupport.getAliasProtocol(ModeDecoderType.NXDN48));
+        assertEquals(Protocol.NXDN, RadioReferenceAliasSupport.getAliasProtocol(ModeDecoderType.NXDN48));
+        assertEquals(Protocol.NXDN, RadioReferenceAliasSupport.getAliasProtocol(ModeDecoderType.NXDN96));
         assertNull(RadioReferenceAliasSupport.getAliasProtocol(null));
     }
 
@@ -68,6 +69,7 @@ public class RadioReferenceAliasSupportTest
         assertEquals(13, RadioReferenceAliasSupport.getSuggestedTalkgroup(Protocol.NBFM, aliases));
         assertEquals(1, RadioReferenceAliasSupport.getSuggestedTalkgroup(Protocol.AM, aliases));
         assertEquals(1, RadioReferenceAliasSupport.getSuggestedTalkgroup(Protocol.APCO25, aliases));
+        assertEquals(0, RadioReferenceAliasSupport.getSuggestedTalkgroup(Protocol.NXDN, aliases));
         assertEquals(1, RadioReferenceAliasSupport.getSuggestedTalkgroup(Protocol.NBFM, List.of()));
     }
 
@@ -109,5 +111,26 @@ public class RadioReferenceAliasSupportTest
         assertEquals("Station9112", RadioReferenceAliasSupport.getNextAliasListName("Station911", List.of("Station911")));
         assertEquals("ABCDEFGHIJKLMNOPQRSTUVWX2", RadioReferenceAliasSupport.getNextAliasListName(
             "ABCDEFGHIJKLMNOPQRSTUVWXY", List.of("ABCDEFGHIJKLMNOPQRSTUVWXY")));
+    }
+
+    @Test
+    public void protocolTalkgroupRange()
+    {
+        assertEquals(0, RadioReferenceAliasSupport.parseTalkgroup("0", Protocol.NXDN));
+        assertEquals(0, RadioReferenceAliasSupport.parseTalkgroup("0", Protocol.APCO25));
+        assertNull(RadioReferenceAliasSupport.parseTalkgroup("0", Protocol.NBFM));
+        assertNull(RadioReferenceAliasSupport.parseTalkgroup("65536", Protocol.NXDN));
+        assertEquals("0 to 65,535", RadioReferenceAliasSupport.getTalkgroupRange(Protocol.NXDN));
+        assertEquals("1 to 65,535", RadioReferenceAliasSupport.getTalkgroupRange(Protocol.NBFM));
+    }
+
+    @Test
+    public void uniqueAliasListName()
+    {
+        assertEquals("Mason Fire", RadioReferenceAliasSupport.getUniqueAliasListName(" Mason Fire ", List.of("Other")));
+        assertEquals("Mason Fire2", RadioReferenceAliasSupport.getUniqueAliasListName("Mason Fire", List.of("mason fire")));
+        assertEquals("ABCDEFGHIJKLMNOPQRSTUVWXY", RadioReferenceAliasSupport.getUniqueAliasListName(
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ", List.of()));
+        assertNull(RadioReferenceAliasSupport.getUniqueAliasListName(" ", List.of()));
     }
 }

@@ -117,6 +117,8 @@ public enum Setting
     RADIO_REFERENCE_ALIAS_LIST_UPDATE_INTERVAL(Node.RADIO_REFERENCE, "alias.list.update.interval"),
     RADIO_REFERENCE_CREATE_AND_SHOW_CHANNEL_EDITOR(Node.RADIO_REFERENCE, "create.and.show.channel.editor"),
     RADIO_REFERENCE_ENCRYPTED_TALKGROUP_DO_NOT_MONITOR(Node.RADIO_REFERENCE, "encrypted.talkgroup.import.do.not.monitor"),
+    RADIO_REFERENCE_CONVENTIONAL_OWN_ALIAS_LIST(Node.RADIO_REFERENCE, "conventional.digital.own.alias.list"),
+    RADIO_REFERENCE_CONVENTIONAL_DEFAULT_TALKGROUP_WARNING(Node.RADIO_REFERENCE, "conventional.default.talkgroup.warning"),
     RADIO_REFERENCE_LOCATION(Node.RADIO_REFERENCE, "location"),
     RADIO_REFERENCE_LOCATION_LABEL(Node.RADIO_REFERENCE, "location.label"),
     RADIO_REFERENCE_PASSWORD(Node.RADIO_REFERENCE, "user.authorization"),
