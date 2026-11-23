@@ -64,6 +64,8 @@ public class IdentifierCollection
 
     public IdentifierCollection(Collection<Identifier> identifiers, int timeslot)
     {
+        mTimeslot = timeslot;
+
         for(Identifier identifier: identifiers)
         {
             if(identifier == null)
@@ -71,7 +73,7 @@ public class IdentifierCollection
                 throw new IllegalArgumentException("Identifier cannot be null");
             }
 
-            mIdentifiers.add(identifier);
+            mIdentifiers.add(ITimeslotIdentifier.tag(identifier, timeslot));
 
             if(identifier instanceof AliasListConfigurationIdentifier)
             {

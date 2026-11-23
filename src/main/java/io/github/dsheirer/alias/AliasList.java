@@ -33,6 +33,7 @@ import io.github.dsheirer.alias.id.talkgroup.P25FullyQualifiedTalkgroup;
 import io.github.dsheirer.alias.id.talkgroup.Talkgroup;
 import io.github.dsheirer.alias.id.talkgroup.TalkgroupRange;
 import io.github.dsheirer.alias.id.tone.TonesID;
+import io.github.dsheirer.identifier.ITimeslotIdentifier;
 import io.github.dsheirer.identifier.Identifier;
 import io.github.dsheirer.identifier.IdentifierCollection;
 import io.github.dsheirer.identifier.dcs.DCSIdentifier;
@@ -659,6 +660,8 @@ public class AliasList
     {
         private Map<String,Alias> mFullyQualifiedTalkgroupAliasMap = new HashMap<>();
         private Map<Integer,Alias> mTalkgroupAliasMap = new TreeMap<>();
+        //Talkgroup aliases limited to one timeslot (DMR), by timeslot, then talkgroup value
+        private Map<Integer,Map<Integer,Alias>> mTimeslotTalkgroupAliasMap = new HashMap<>();
         private Map<TalkgroupRange, Alias> mTalkgroupRangeAliasMap = new HashMap<>();
 
         public TalkgroupAliasList()
@@ -675,6 +678,22 @@ public class AliasList
 
             //Attempt to match the talkgroup value
             int value = identifier.getValue();
+
+            //An alias limited to the identifier's timeslot takes precedence over an alias for any timeslot
+            if(identifier instanceof ITimeslotIdentifier timeslotIdentifier && timeslotIdentifier.getTimeslot() > 0)
+            {
+                Map<Integer,Alias> timeslotMap = mTimeslotTalkgroupAliasMap.get(timeslotIdentifier.getTimeslot());
+
+                if(timeslotMap != null)
+                {
+                    Alias timeslotAlias = timeslotMap.get(value);
+
+                    if(timeslotAlias != null)
+                    {
+                        return timeslotAlias;
+                    }
+                }
+            }
 
             Alias mapValue = mTalkgroupAliasMap.get(value);
             if (mapValue != null)
@@ -722,6 +741,31 @@ public class AliasList
                     mFullyQualifiedTalkgroupAliasMap.put(fqt.getHashKey(), alias);
                 }
             }
+            else if(talkgroup.getTimeslot() > 0)
+            {
+                Map<Integer,Alias> timeslotMap = mTimeslotTalkgroupAliasMap.computeIfAbsent(talkgroup.getTimeslot(),
+                    timeslot -> new TreeMap<>());
+
+                //Detect talkgroup collisions within the timeslot and set overlap flag for both
+                Alias existing = timeslotMap.get(talkgroup.getValue());
+
+                if(existing != null && !existing.equals(alias))
+                {
+                    talkgroup.setOverlap(true);
+
+                    for(AliasID aliasID: existing.getAliasIdentifiers())
+                    {
+                        if(aliasID instanceof Talkgroup existingTalkgroup &&
+                            existingTalkgroup.getValue() == talkgroup.getValue() &&
+                            existingTalkgroup.getTimeslot() == talkgroup.getTimeslot())
+                        {
+                            aliasID.setOverlap(true);
+                        }
+                    }
+                }
+
+                timeslotMap.put(talkgroup.getValue(), alias);
+            }
             else
             {
                 //Detect talkgroup collisions and set overlap flag for both
@@ -735,7 +779,8 @@ public class AliasList
 
                         for(AliasID aliasID: existing.getAliasIdentifiers())
                         {
-                            if(aliasID instanceof Talkgroup && ((Talkgroup)aliasID).getValue() == talkgroup.getValue())
+                            if(aliasID instanceof Talkgroup && ((Talkgroup)aliasID).getValue() == talkgroup.getValue() &&
+                                ((Talkgroup)aliasID).getTimeslot() == 0)
                             {
                                 aliasID.setOverlap(true);
                             }
@@ -768,6 +813,7 @@ public class AliasList
         public void remove(Alias alias)
         {
             mTalkgroupAliasMap.values().removeAll(Collections.singleton(alias));
+            mTimeslotTalkgroupAliasMap.values().forEach(map -> map.values().removeAll(Collections.singleton(alias)));
             mTalkgroupRangeAliasMap.values().removeAll(Collections.singleton(alias));
         }
     }

@@ -20,6 +20,7 @@
 package io.github.dsheirer.alias.id.talkgroup;
 
 
+import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.dataformat.xml.annotation.JacksonXmlProperty;
 import io.github.dsheirer.alias.id.AliasID;
 import io.github.dsheirer.alias.id.AliasIDType;
@@ -35,6 +36,12 @@ public class Talkgroup extends AliasID implements Comparable<Talkgroup>
     private static final Logger mLog = LoggerFactory.getLogger(Talkgroup.class);
     private Protocol mProtocol = Protocol.UNKNOWN;
     private int mValue;
+    private int mTimeslot = ANY_TIMESLOT;
+
+    /**
+     * Timeslot value for a talkgroup alias that matches the talkgroup on any timeslot.
+     */
+    public static final int ANY_TIMESLOT = 0;
 
     public Talkgroup()
     {
@@ -62,6 +69,28 @@ public class Talkgroup extends AliasID implements Comparable<Talkgroup>
     public void setValue(int value)
     {
         mValue = value;
+        updateValueProperty();
+    }
+
+    /**
+     * Timeslot that this talkgroup alias is limited to (DMR timeslot 1 or 2), or ANY_TIMESLOT (0) to match the
+     * talkgroup on any timeslot.  Lets the same talkgroup used on both timeslots of a conventional DMR repeater be
+     * aliased (and streamed, with a Stream As Talkgroup) separately for each timeslot.  On trunked DMR systems the
+     * timeslot is assigned per call, so these aliases should use any timeslot.
+     */
+    @JsonInclude(JsonInclude.Include.NON_DEFAULT)
+    @JacksonXmlProperty(isAttribute = true, localName = "timeslot")
+    public int getTimeslot()
+    {
+        return mTimeslot;
+    }
+
+    /**
+     * Sets the timeslot that this talkgroup alias is limited to, or ANY_TIMESLOT (0) for any timeslot.
+     */
+    public void setTimeslot(int timeslot)
+    {
+        mTimeslot = Math.max(timeslot, ANY_TIMESLOT);
         updateValueProperty();
     }
 
@@ -107,6 +136,11 @@ public class Talkgroup extends AliasID implements Comparable<Talkgroup>
         sb.append("Talkgroup:").append(talkgroup != null ? talkgroup : "error");
         sb.append(" Protocol:").append((mProtocol));
 
+        if(mTimeslot != ANY_TIMESLOT)
+        {
+            sb.append(" Slot:").append(mTimeslot);
+        }
+
         if(!isValid())
         {
             sb.append(" **NOT VALID**");
@@ -121,7 +155,8 @@ public class Talkgroup extends AliasID implements Comparable<Talkgroup>
         if(id instanceof Talkgroup)
         {
             Talkgroup tgid = (Talkgroup)id;
-            return (getProtocol() == tgid.getProtocol()) && (getValue() == tgid.getValue());
+            return (getProtocol() == tgid.getProtocol()) && (getValue() == tgid.getValue()) &&
+                (getTimeslot() == tgid.getTimeslot());
         }
 
         return false;
@@ -144,7 +179,8 @@ public class Talkgroup extends AliasID implements Comparable<Talkgroup>
 
         if(getProtocol().equals(other.getProtocol()))
         {
-            return Integer.compare(getValue(), other.getValue());
+            int comparison = Integer.compare(getValue(), other.getValue());
+            return comparison != 0 ? comparison : Integer.compare(getTimeslot(), other.getTimeslot());
         }
         else
         {

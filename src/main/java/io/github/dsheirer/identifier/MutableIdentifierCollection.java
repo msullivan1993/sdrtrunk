@@ -122,6 +122,8 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     private void add(Identifier identifier)
     {
+        identifier = ITimeslotIdentifier.tag(identifier, getTimeslot());
+
         if(identifier.isValid() && !mIdentifiers.contains(identifier))
         {
             mIdentifiers.add(identifier);
@@ -143,6 +145,8 @@ public class MutableIdentifierCollection extends IdentifierCollection implements
      */
     private void silentAdd(Identifier identifier)
     {
+        identifier = ITimeslotIdentifier.tag(identifier, getTimeslot());
+
         if(identifier.isValid() && !mIdentifiers.contains(identifier))
         {
             mIdentifiers.add(identifier);
