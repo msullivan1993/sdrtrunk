@@ -26,6 +26,7 @@ import ch.qos.logback.classic.filter.ThresholdFilter;
 import ch.qos.logback.core.rolling.RollingFileAppender;
 import ch.qos.logback.core.rolling.TimeBasedRollingPolicy;
 import com.google.common.eventbus.Subscribe;
+import io.github.dsheirer.audio.broadcast.StreamDiagnostics;
 import io.github.dsheirer.eventbus.MyEventBus;
 import io.github.dsheirer.settings.SettingsType;
 import io.github.dsheirer.settings.Settings;
@@ -51,6 +52,7 @@ public class ApplicationLog
 
     private Settings mSettings;
     private RollingFileAppender mRollingFileAppender;
+    private RollingFileAppender mStreamDiagnosticsAppender;
     private Path mApplicationLogPath;
 
     /**
@@ -129,6 +131,8 @@ public class ApplicationLog
             ((ch.qos.logback.classic.Logger)logger).setLevel(Level.ALL);
             ((ch.qos.logback.classic.Logger)logger).addAppender(mRollingFileAppender);
 
+            startStreamDiagnosticsLog(loggerContext);
+
 //            StatusPrinter.print(loggerContext);
             Attributes atts = findManifestAttributes();
             if (atts != null) {
@@ -179,6 +183,51 @@ public class ApplicationLog
             ((ch.qos.logback.classic.Logger)logger).detachAppender(mRollingFileAppender);
             mRollingFileAppender = null;
         }
+
+        if(mStreamDiagnosticsAppender != null)
+        {
+            mStreamDiagnosticsAppender.stop();
+            LoggerContext loggerContext = (LoggerContext)LoggerFactory.getILoggerFactory();
+            loggerContext.getLogger(StreamDiagnostics.LOGGER_NAME).detachAppender(mStreamDiagnosticsAppender);
+            mStreamDiagnosticsAppender = null;
+        }
+    }
+
+    /**
+     * Starts the stream diagnostics log (stream_diagnostics.log in the application log directory, rolled daily) for
+     * the STREAMDIAG logger.  Its lines go only to that file, not to the application log or console.
+     */
+    private void startStreamDiagnosticsLog(LoggerContext loggerContext)
+    {
+        Path logfile = mApplicationLogPath.resolve(StreamDiagnostics.LOG_FILENAME);
+        mLog.info("Stream Diagnostics Log File: " + logfile);
+
+        PatternLayoutEncoder encoder = new PatternLayoutEncoder();
+        encoder.setContext(loggerContext);
+        encoder.setPattern("%d{yyyyMMdd HHmmss.SSS} %msg%n");
+        encoder.start();
+
+        mStreamDiagnosticsAppender = new RollingFileAppender();
+        mStreamDiagnosticsAppender.setContext(loggerContext);
+        mStreamDiagnosticsAppender.setAppend(true);
+        mStreamDiagnosticsAppender.setName("STREAMDIAG_FILE");
+        mStreamDiagnosticsAppender.setEncoder(encoder);
+        mStreamDiagnosticsAppender.setFile(logfile.toString());
+
+        TimeBasedRollingPolicy rollingPolicy = new TimeBasedRollingPolicy<>();
+        rollingPolicy.setContext(loggerContext);
+        rollingPolicy.setFileNamePattern(logfile.toString().replace(StreamDiagnostics.LOG_FILENAME,
+            "%d{yyyyMMdd}_" + StreamDiagnostics.LOG_FILENAME));
+        rollingPolicy.setMaxHistory(APPLICATION_LOG_MAX_HISTORY);
+        rollingPolicy.setParent(mStreamDiagnosticsAppender);
+        rollingPolicy.start();
+        mStreamDiagnosticsAppender.setRollingPolicy(rollingPolicy);
+        mStreamDiagnosticsAppender.start();
+
+        ch.qos.logback.classic.Logger streamLogger = loggerContext.getLogger(StreamDiagnostics.LOGGER_NAME);
+        streamLogger.setLevel(Level.INFO);
+        streamLogger.setAdditive(false);
+        streamLogger.addAppender(mStreamDiagnosticsAppender);
     }
 
     /**

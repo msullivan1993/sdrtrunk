@@ -235,6 +235,7 @@ public class AudioStreamingManager implements Listener<AudioSegment>
 
             AudioRecording audioRecording = new AudioRecording(path, broadcastChannels, identifierCollection,
                     audioSegment.getStartTimestamp(), length);
+            StreamDiagnostics.upload(audioSegment, identifierCollection, broadcastChannels);
             mAudioRecordingListener.receive(audioRecording);
         }
         catch(IOException ioe)

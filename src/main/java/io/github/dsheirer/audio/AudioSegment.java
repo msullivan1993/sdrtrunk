@@ -23,10 +23,13 @@ import io.github.dsheirer.alias.Alias;
 import io.github.dsheirer.alias.AliasList;
 import io.github.dsheirer.alias.id.broadcast.BroadcastChannel;
 import io.github.dsheirer.alias.id.priority.Priority;
+import io.github.dsheirer.audio.broadcast.StreamDiagnostics;
 import io.github.dsheirer.identifier.Identifier;
+import io.github.dsheirer.identifier.IdentifierClass;
 import io.github.dsheirer.identifier.IdentifierCollection;
 import io.github.dsheirer.identifier.IdentifierUpdateNotification;
 import io.github.dsheirer.identifier.MutableIdentifierCollection;
+import io.github.dsheirer.identifier.Role;
 import io.github.dsheirer.identifier.encryption.EncryptionKeyIdentifier;
 import io.github.dsheirer.sample.Broadcaster;
 import io.github.dsheirer.sample.Listener;
@@ -35,7 +38,9 @@ import java.util.Collections;
 import java.util.Date;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicInteger;
 import javafx.beans.property.BooleanProperty;
@@ -83,6 +88,12 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
     private boolean mDisposing = false;
     private AudioSegment mLinkedAudioSegment;
     private int mTimeslot;
+    //Stream diagnostics (#2589): which identifier added each broadcast channel, and the identifier timeline
+    private static final int MAX_DIAGNOSTIC_TIMELINE = 200;
+    private final Map<BroadcastChannel,String> mBroadcastChannelSources = new ConcurrentHashMap<>();
+    private final List<String> mDiagnosticTimeline = new CopyOnWriteArrayList<>();
+    private Identifier mLastToIdentifier;
+    private boolean mPreloading = false;
 
     /**
      * Constructs an instance
@@ -296,10 +307,37 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
      */
     void addIdentifiers(Collection<Identifier> identifiers)
     {
-        for(Identifier identifier: identifiers)
+        mPreloading = true;
+
+        try
         {
-            addIdentifier(identifier);
+            for(Identifier identifier: identifiers)
+            {
+                addIdentifier(identifier);
+            }
         }
+        finally
+        {
+            mPreloading = false;
+        }
+    }
+
+    /**
+     * Stream diagnostics: describes the identifier and alias that first added the broadcast channel to this segment.
+     */
+    public String getBroadcastChannelSource(BroadcastChannel broadcastChannel)
+    {
+        String source = mBroadcastChannelSources.get(broadcastChannel);
+        return source != null ? source : "unknown";
+    }
+
+    /**
+     * Stream diagnostics: timeline of the user identifiers added to this segment, with the aliases and streams that
+     * each one matched.
+     */
+    public List<String> getDiagnosticTimeline()
+    {
+        return Collections.unmodifiableList(mDiagnosticTimeline);
     }
 
     /**
@@ -450,12 +488,53 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
         }
 
         List<Alias> aliases = mAliasList.getAliases(identifier);
+        long offset = System.currentTimeMillis() - mStartTimestamp;
+        boolean user = identifier.getIdentifierClass() == IdentifierClass.USER;
+
+        if(user && identifier.getRole() == Role.TO)
+        {
+            if(mLastToIdentifier != null && !mLastToIdentifier.equals(identifier))
+            {
+                StreamDiagnostics.toChange(this, mLastToIdentifier, identifier, offset);
+            }
+
+            mLastToIdentifier = identifier;
+        }
+
+        StringBuilder diagnostic = user ? new StringBuilder() : null;
+
+        if(diagnostic != null)
+        {
+            diagnostic.append("+").append(offset).append("ms ").append(mPreloading ? "(preload) " : "")
+                .append(StreamDiagnostics.describe(identifier));
+        }
 
         for(Alias alias: aliases)
         {
             if(alias.isRecordable())
             {
                 mRecordAudio.set(true);
+            }
+
+            //Stream diagnostics: remember the identifier and alias that first added each broadcast channel
+            for(BroadcastChannel broadcastChannel: alias.getBroadcastChannels())
+            {
+                if(!mBroadcastChannels.contains(broadcastChannel))
+                {
+                    mBroadcastChannelSources.putIfAbsent(broadcastChannel, "+" + offset + "ms " +
+                        (mPreloading ? "(preload) " : "") + StreamDiagnostics.describe(identifier) +
+                        " alias [" + alias.getName() + "]");
+                }
+            }
+
+            if(diagnostic != null)
+            {
+                diagnostic.append(" alias [").append(alias.getName()).append("]");
+
+                if(!alias.getBroadcastChannels().isEmpty())
+                {
+                    diagnostic.append(" streams ").append(alias.getBroadcastChannels());
+                }
             }
 
             //Add all broadcast channels for the alias ... let the set handle duplication.
@@ -468,6 +547,11 @@ public class AudioSegment implements Listener<IdentifierUpdateNotification>
             {
                 mMonitorPriority.set(playbackPriority);
             }
+        }
+
+        if(diagnostic != null && mDiagnosticTimeline.size() < MAX_DIAGNOSTIC_TIMELINE)
+        {
+            mDiagnosticTimeline.add(diagnostic.toString());
         }
     }
 
