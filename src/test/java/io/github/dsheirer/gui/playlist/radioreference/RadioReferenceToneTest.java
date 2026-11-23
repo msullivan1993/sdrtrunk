@@ -60,6 +60,9 @@ public class RadioReferenceToneTest
         assertEquals(RadioReferenceTone.Type.NAC, RadioReferenceTone.parse("293 NAC").type());
         assertEquals(1, RadioReferenceTone.parse("CC1").accessCode());
         assertEquals(RadioReferenceTone.Type.COLOR_CODE, RadioReferenceTone.parse("CC 12").type());
+        assertEquals(3, RadioReferenceTone.parse("CC 3 TG 300 SL 1").accessCode());
+        assertEquals(1, RadioReferenceTone.parse("CC1 TG 1 TS 2").accessCode());
+        assertEquals(5, RadioReferenceTone.parse("RAN 5 TG 100").accessCode());
         assertEquals(1, RadioReferenceTone.parse("RAN 1").accessCode());
         assertEquals(RadioReferenceTone.Type.RAN, RadioReferenceTone.parse("RAN1").type());
     }
