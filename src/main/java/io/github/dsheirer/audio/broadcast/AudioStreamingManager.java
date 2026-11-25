@@ -220,8 +220,16 @@ public class AudioStreamingManager implements Listener<AudioSegment>
                         //resident in this completed call actually routes to, so a stale channel left by a previous
                         //talkgroup is not streamed under the current talkgroup.  See
                         //broadcastChannelsForCurrentIdentifiers().
-                        processAudioSegment(audioSegment, identifiers, broadcastChannelsForCurrentIdentifiers(
-                                audioSegment.getBroadcastChannels(), audioSegment.getAliasList(), identifiers));
+                        Set<BroadcastChannel> accumulated = audioSegment.getBroadcastChannels();
+                        Set<BroadcastChannel> filtered = broadcastChannelsForCurrentIdentifiers(accumulated,
+                                audioSegment.getAliasList(), identifiers);
+                        StreamDiagnostics.filtered(audioSegment, identifiers, accumulated, filtered);
+
+                        //Nothing left to stream to: skip encoding a recording that no stream would receive
+                        if(filtered != null && !filtered.isEmpty())
+                        {
+                            processAudioSegment(audioSegment, identifiers, filtered);
+                        }
                     }
                     //Core streams that just received a recording have claimed this segment, so the drop only
                     //reaches Core streams that announced it and got nothing, such as a patch member with no alias.
