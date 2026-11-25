@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.LinkedTransferQueue;
@@ -215,7 +216,12 @@ public class AudioStreamingManager implements Listener<AudioSegment>
                     }
                     else
                     {
-                        processAudioSegment(audioSegment, identifiers, audioSegment.getBroadcastChannels());
+                        //Filter the accumulated broadcast channel set down to the stream(s) an identifier still
+                        //resident in this completed call actually routes to, so a stale channel left by a previous
+                        //talkgroup is not streamed under the current talkgroup.  See
+                        //broadcastChannelsForCurrentIdentifiers().
+                        processAudioSegment(audioSegment, identifiers, broadcastChannelsForCurrentIdentifiers(
+                                audioSegment.getBroadcastChannels(), audioSegment.getAliasList(), identifiers));
                     }
                     //Core streams that just received a recording have claimed this segment, so the drop only
                     //reaches Core streams that announced it and got nothing, such as a patch member with no alias.
@@ -248,6 +254,84 @@ public class AudioStreamingManager implements Listener<AudioSegment>
         {
             broadcastModel.coreSegmentDropped(audioSegment);
         }
+    }
+
+    /**
+     * Restricts a completed non-patch call's accumulated broadcast channel set to only the channels that an alias of
+     * an identifier still resident in the call routes to - the final TO, the source radio (FROM), or any other
+     * current identifier.
+     *
+     * <p>An audio segment accumulates a broadcast channel for every identifier it carries while the call is open.
+     * When a call terminator is missed, or a segment is seeded from a stale identifier collection, a previous
+     * talkgroup's TO can leave its broadcast channel in the accumulated set.  Streaming to that raw set then uploads
+     * the call to a stream that belongs to the PREVIOUS talkgroup, tagged with the CURRENT TO.  Recomputing the set
+     * from the identifiers the call currently carries keeps it only on the stream(s) those identifiers route to.
+     *
+     * <p>Both TO- and FROM-routed streams are preserved: an operator can attach a broadcast channel to a radio
+     * (source) alias - "stream everything unit N transmits" - and that stream is legitimate even when the TO
+     * talkgroup routes elsewhere.  Patch groups are decomposed before this method and never reach it.
+     *
+     * <p>Never drops the call to zero channels: when none of the accumulated channels are routed by a current
+     * identifier but those identifiers do route somewhere, the current identifiers' alias channels are used
+     * directly, so a legitimate call reaches its live streams rather than nowhere.
+     *
+     * @param accumulated broadcast channels the completed segment gathered across its lifetime
+     * @param aliasList for the segment, used to resolve each identifier's routed broadcast channels
+     * @param identifiers currently resident in the completed call (TO, FROM, ...)
+     * @return the subset of accumulated channels routed by a current identifier (or, when none survive, the current
+     * identifiers' alias channels); the unfiltered input when there is nothing to filter against
+     */
+    static Set<BroadcastChannel> broadcastChannelsForCurrentIdentifiers(Set<BroadcastChannel> accumulated,
+            AliasList aliasList, IdentifierCollection identifiers)
+    {
+        //Nothing to filter, or no alias list / identifiers to filter against: preserve prior behaviour.
+        if(accumulated == null || accumulated.isEmpty() || aliasList == null || identifiers == null)
+        {
+            return accumulated;
+        }
+
+        //Broadcast channels an alias of any identifier still resident in the call routes to (TO, FROM, ...).
+        Set<BroadcastChannel> routed = new HashSet<>();
+
+        for(Identifier identifier: identifiers.getIdentifiers())
+        {
+            for(Alias alias: aliasList.getAliases(identifier))
+            {
+                routed.addAll(alias.getBroadcastChannels());
+            }
+        }
+
+        //Keep only the accumulated channels a current identifier routes to; collect the rest as stale drops.
+        Set<BroadcastChannel> keptChannels = new LinkedHashSet<>();
+        Set<BroadcastChannel> droppedChannels = new LinkedHashSet<>();
+
+        for(BroadcastChannel broadcastChannel: accumulated)
+        {
+            if(routed.contains(broadcastChannel))
+            {
+                keptChannels.add(broadcastChannel);
+            }
+            else
+            {
+                droppedChannels.add(broadcastChannel);
+            }
+        }
+
+        //Never drop the call entirely: if none of the accumulated channels are routed by a current identifier but
+        //those identifiers do route somewhere, stream to those live routes rather than nowhere.
+        if(keptChannels.isEmpty() && !routed.isEmpty())
+        {
+            keptChannels.addAll(routed);
+        }
+
+        if(!droppedChannels.isEmpty() && mLog.isDebugEnabled())
+        {
+            mLog.debug("Dropped stale broadcast channel(s) " + droppedChannels + " from a completed call with final " +
+                    "TO [" + identifiers.getToIdentifier() + "] - routed only by an identifier no longer resident in " +
+                    "the call");
+        }
+
+        return keptChannels;
     }
 
     /**
