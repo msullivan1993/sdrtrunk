@@ -163,6 +163,78 @@ public final class StreamDiagnostics
     }
 
     /**
+     * Logs a FILTERED line when the completed-call stream filter (upstream PR #2789) removes streams that the call
+     * collected but that no identifier still in the call routes to.  When nothing is kept, the call isn't streamed.
+     * @param segment completed audio segment
+     * @param identifiers final identifiers of the call
+     * @param accumulated streams the segment collected while the call was open
+     * @param kept streams the call is sent to after filtering
+     */
+    public static void filtered(AudioSegment segment, IdentifierCollection identifiers,
+                                Set<BroadcastChannel> accumulated, Set<BroadcastChannel> kept)
+    {
+        try
+        {
+            if(accumulated == null || accumulated.isEmpty())
+            {
+                return;
+            }
+
+            List<BroadcastChannel> dropped = new ArrayList<>();
+
+            for(BroadcastChannel channel : accumulated)
+            {
+                if(kept == null || !kept.contains(channel))
+                {
+                    dropped.add(channel);
+                }
+            }
+
+            if(dropped.isEmpty())
+            {
+                return;
+            }
+
+            Set<String> keptNames = new TreeSet<>();
+
+            if(kept != null)
+            {
+                for(BroadcastChannel channel : kept)
+                {
+                    keptNames.add(channel.getChannelName());
+                }
+            }
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("FILTERED ").append(context(identifiers, segment))
+                .append(" TO=").append(describe(identifiers.getToIdentifier()))
+                .append(" FROM=").append(describe(identifiers.getFromIdentifier()))
+                .append(" kept=").append(keptNames)
+                .append(keptNames.isEmpty() ? " - CALL NOT STREAMED" : "")
+                .append(" duration=").append(segment.getDuration()).append("ms");
+
+            for(BroadcastChannel channel : dropped)
+            {
+                sb.append("\n    dropped stream [").append(channel.getChannelName()).append("] - added by: ")
+                    .append(segment.getBroadcastChannelSource(channel));
+            }
+
+            sb.append("\n    timeline:");
+
+            for(String entry : segment.getDiagnosticTimeline())
+            {
+                sb.append("\n      ").append(entry);
+            }
+
+            LOG.info(sb.toString());
+        }
+        catch(Exception e)
+        {
+            LOG.error("Error logging stream diagnostics", e);
+        }
+    }
+
+    /**
      * Describes an identifier as role, form, value and class.
      */
     public static String describe(Identifier identifier)
