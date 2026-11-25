@@ -664,6 +664,8 @@ public class TunerManager implements IDiscoveredTunerStatusListener
                         if(source != null)
                         {
                             source.setTunerName(discoveredTuner.getTuner().getPreferredName());
+                            source.setNoiseFloorEstimator(discoveredTuner.getTuner().getTunerController()
+                                .getNoiseFloorEstimator());
                             return source;
                         }
                     }
@@ -693,6 +695,8 @@ public class TunerManager implements IDiscoveredTunerStatusListener
                         if(source != null)
                         {
                             source.setTunerName(discoveredTuner.getTuner().getPreferredName());
+                            source.setNoiseFloorEstimator(discoveredTuner.getTuner().getTunerController()
+                                .getNoiseFloorEstimator());
                         }
                     }
                     catch(Exception e)
