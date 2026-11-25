@@ -152,6 +152,7 @@ public class AliasFactory
             case TALKGROUP:
                 Talkgroup originalTalkgroup = (Talkgroup)id;
                 Talkgroup copyTalkgroup = new Talkgroup(originalTalkgroup.getProtocol(), originalTalkgroup.getValue());
+                copyTalkgroup.setTimeslot(originalTalkgroup.getTimeslot());
                 copyTalkgroup.setOverlap(originalTalkgroup.overlapProperty().get());
                 return copyTalkgroup;
             case TALKGROUP_RANGE:
