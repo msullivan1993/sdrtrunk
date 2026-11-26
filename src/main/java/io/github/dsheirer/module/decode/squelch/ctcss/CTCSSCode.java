@@ -86,11 +86,12 @@ public enum CTCSSCode
 
     static
     {
-        EnumSet<CTCSSCode> codes = EnumSet.allOf(CTCSSCode.class);
-        DETECTING_CODES = java.util.Collections.unmodifiableSet(codes);
-        codes.remove(UNKNOWNL);
-        codes.remove(UNKNOWNH);
-        STANDARD_CODES = java.util.Collections.unmodifiableSet(codes);
+        //Separate sets: the detecting codes keep the out-of-range placeholder at each end
+        DETECTING_CODES = java.util.Collections.unmodifiableSet(EnumSet.allOf(CTCSSCode.class));
+        EnumSet<CTCSSCode> standard = EnumSet.allOf(CTCSSCode.class);
+        standard.remove(UNKNOWNL);
+        standard.remove(UNKNOWNH);
+        STANDARD_CODES = java.util.Collections.unmodifiableSet(standard);
     }
 
     private final float mFrequency;
