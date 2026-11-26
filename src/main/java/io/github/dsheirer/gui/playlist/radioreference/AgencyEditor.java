@@ -80,6 +80,15 @@ public class AgencyEditor extends VBox
     }
 
     /**
+     * Sets the country of the agencies shown, for the US narrowband correction
+     * @param unitedStates true for United States agencies and counties
+     */
+    public void setUnitedStates(boolean unitedStates)
+    {
+        getAgencyFrequencyEditor().setUnitedStates(unitedStates);
+    }
+
+    /**
      * Sets the list of displayed agencies and clears out any existing agencies.  Auto-selects an agency if the user
      * has selected that agency before.
      *

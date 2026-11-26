@@ -948,6 +948,12 @@ public class RadioReferenceEditor extends BorderPane implements Consumer<Authori
         getStateComboBox().getItems().clear();
         getCountyComboBox().getItems().clear();
 
+        boolean unitedStates = country != null &&
+            RadioReferenceNarrowband.isUnitedStates(country.getCountryCode(), country.getName());
+        getNationalAgencyEditor().setUnitedStates(unitedStates);
+        getStateAgencyEditor().setUnitedStates(unitedStates);
+        getCountyAgencyEditor().setUnitedStates(unitedStates);
+
         if(country != null)
         {
             ThreadPool.CACHED.execute(() -> {

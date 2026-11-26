@@ -130,6 +130,7 @@ public class FrequencyEditor extends VBox
     private enum DefaultTalkgroupChoice {USE_DEFAULT, KEEP, CANCEL}
 
     private CheckBox mOwnAliasListCheckBox;
+    private boolean mUnitedStates = false;
 
     public FrequencyEditor(Settings settings, RadioReference radioReference,
                            PlaylistManager playlistManager, Level level)
@@ -765,6 +766,15 @@ public class FrequencyEditor extends VBox
     }
 
     /**
+     * Sets the country of the frequencies shown, for the US narrowband correction
+     * @param unitedStates true for United States frequencies
+     */
+    public void setUnitedStates(boolean unitedStates)
+    {
+        mUnitedStates = unitedStates;
+    }
+
+    /**
      * Creates a channel configuration from the supplied values
      * @param modeDecoderType indicating the decoder type
      * @param frequency value
@@ -776,7 +786,8 @@ public class FrequencyEditor extends VBox
     private Channel createChannel(ModeDecoderType modeDecoderType, long frequency, String system, String site, String name,
                                   String tone)
     {
-        return RadioReferenceChannelFactory.conventional(modeDecoderType, frequency, system, site, name, tone);
+        return RadioReferenceChannelFactory.conventional(modeDecoderType, frequency, system, site, name, tone,
+            mUnitedStates);
     }
 
     private TextField getSystemTextField()

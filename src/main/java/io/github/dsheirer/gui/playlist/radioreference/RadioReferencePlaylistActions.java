@@ -579,8 +579,10 @@ public class RadioReferencePlaylistActions
         String system = source.length > 0 ? source[0] : null;
         String site = source.length > 2 ? source[2] : source.length > 1 ? source[1] : null;
         String name = candidate.alphaTag() != null ? candidate.alphaTag() : candidate.title();
+        //The candidate's location decides the country for the US narrowband correction
+        boolean unitedStates = RadioReferenceNarrowband.isUnitedStatesLocation(candidate.latitude(), candidate.longitude());
         Channel channel = RadioReferenceChannelFactory.conventional(mode, candidate.frequencyHz(), system, site, name,
-            candidate.tone());
+            candidate.tone(), unitedStates);
 
         if(channel == null)
         {
