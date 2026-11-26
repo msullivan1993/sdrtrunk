@@ -159,6 +159,15 @@ public class AgencyFrequencyEditor extends GridPane
         getFrequencyTableView().getItems().clear();
     }
 
+    /**
+     * Sets the country of the frequencies shown, for the US narrowband correction
+     * @param unitedStates true for United States frequencies
+     */
+    public void setUnitedStates(boolean unitedStates)
+    {
+        getFrequencyEditor().setUnitedStates(unitedStates);
+    }
+
     public void clearAndSetLoading()
     {
         clear();

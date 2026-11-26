@@ -57,10 +57,12 @@ public final class RadioReferenceChannelFactory
      * @param system name for the channel
      * @param site name for the channel
      * @param name of the channel
+     * @param unitedStates true when the frequency belongs to a United States system, where analog FM frequencies in the
+     * narrowband mandate ranges are created as 12.5 kHz channels even when Radio Reference lists them as wideband FM
      * @return channel, or null when sdrtrunk has no decoder for the mode
      */
     public static Channel conventional(ModeDecoderType modeDecoderType, long frequency, String system, String site,
-                                       String name)
+                                       String name, boolean unitedStates)
     {
         if(modeDecoderType.hasDecoderType())
         {
@@ -73,12 +75,13 @@ public final class RadioReferenceChannelFactory
             channel.setSourceConfiguration(sourceConfigTuner);
             DecodeConfiguration decodeConfiguration = DecoderFactory.getDecodeConfiguration(modeDecoderType.getDecoderType());
 
-            //Radio Reference lists many narrowband (post-2013) frequencies as wideband FM: only create a wideband
-            //channel when the frequency isn't required to be narrowband
-            if(decodeConfiguration instanceof DecodeConfigNBFM && modeDecoderType == ModeDecoderType.FM &&
-                !RadioReferenceNarrowband.isNarrowband(frequency))
+            //Radio Reference lists many US narrowband (post-2013) frequencies as wideband FM: create a wideband channel
+            //for wideband FM unless it's a US frequency that's required to be narrowband
+            if(decodeConfiguration instanceof DecodeConfigNBFM nbfm)
             {
-                ((DecodeConfigNBFM)decodeConfiguration).setBandwidth(DecodeConfigNBFM.Bandwidth.BW_25_0);
+                boolean wideband = modeDecoderType == ModeDecoderType.FM &&
+                    !(unitedStates && RadioReferenceNarrowband.isNarrowband(frequency));
+                nbfm.setBandwidth(wideband ? DecodeConfigNBFM.Bandwidth.BW_25_0 : DecodeConfigNBFM.Bandwidth.BW_12_5);
             }
             else if(decodeConfiguration instanceof DecodeConfigP25Phase1)
             {
