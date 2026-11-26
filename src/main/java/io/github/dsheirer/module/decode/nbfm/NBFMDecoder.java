@@ -476,13 +476,18 @@ public class NBFMDecoder extends SquelchControlDecoder implements ISourceEventLi
             if(mCTCSSDetector != null)
             {
                 CTCSSMessage ctcssMessage = mCTCSSDetector.process(resampled);
-                getMessageListener().receive(ctcssMessage);     // sending: one of the listeners is NBFMDecoderState
-                if(ctcssMessage.getCallEvent() != null)
+
+                //The detector returns null for a buffer shorter than its minimum block size
+                if(ctcssMessage != null)
                 {
-                    // handles START, CONTINUATION, END.
-                    broadcast(new DecoderStateEvent(this, ctcssMessage.getCallEvent(), State.CALL, 0));
+                    getMessageListener().receive(ctcssMessage);     // sending: one of the listeners is NBFMDecoderState
+                    if(ctcssMessage.getCallEvent() != null)
+                    {
+                        // handles START, CONTINUATION, END.
+                        broadcast(new DecoderStateEvent(this, ctcssMessage.getCallEvent(), State.CALL, 0));
+                    }
+                    mMute = ctcssMessage.getMutedStatus();
                 }
-                mMute = ctcssMessage.getMutedStatus();
             }
             /*
              * While the CTCSS decoder can determine a tone in a single buffer of resampled audio, the DCS decoder

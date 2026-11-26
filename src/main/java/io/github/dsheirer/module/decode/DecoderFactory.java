@@ -108,6 +108,7 @@ import io.github.dsheirer.module.decode.passport.DecodeConfigPassport;
 import io.github.dsheirer.module.decode.passport.PassportDecoder;
 import io.github.dsheirer.module.decode.passport.PassportDecoderState;
 import io.github.dsheirer.module.decode.passport.PassportMessageFilter;
+import io.github.dsheirer.module.decode.squelch.SquelchDecoderConfig;
 import io.github.dsheirer.module.decode.tait.Tait1200Decoder;
 import io.github.dsheirer.module.decode.tait.Tait1200DecoderState;
 import io.github.dsheirer.module.decode.tait.Tait1200MessageFilter;
@@ -954,6 +955,22 @@ public class DecoderFactory
                     copyNBFM.setSquelchNoiseOpenThreshold(origNBFM.getSquelchNoiseOpenThreshold());
                     copyNBFM.setSquelchNoiseCloseThreshold(origNBFM.getSquelchNoiseCloseThreshold());
                     copyNBFM.setTalkgroup(origNBFM.getTalkgroup());
+                    copyNBFM.setAudioALC(origNBFM.isAudioALC());
+                    copyNBFM.setDeemphasis(origNBFM.getDeemphasis());
+                    copyNBFM.setCtcssFineResolution(origNBFM.isCtcssFineResolution());
+
+                    List<SquelchDecoderConfig> copySquelchDecoders = new ArrayList<>();
+
+                    if(origNBFM.getSquelchDecoders() != null)
+                    {
+                        for(SquelchDecoderConfig squelchDecoder : origNBFM.getSquelchDecoders())
+                        {
+                            copySquelchDecoders.add(new SquelchDecoderConfig(squelchDecoder.getSquelchType(),
+                                squelchDecoder.getValue()));
+                        }
+                    }
+
+                    copyNBFM.setSquelchDecoders(copySquelchDecoders);
                     return copyNBFM;
                 case NXDN:
                     DecodeConfigNXDN origNXDN = (DecodeConfigNXDN)config;

@@ -65,7 +65,10 @@ public class CTCSSDetector
      * (256 ms, ~3.9 Hz resolution), where a neighbor's response drops to 3 - 17%.  The decision rate is unchanged.
      */
     private static final int FINE_RESOLUTION_SAMPLES = 2048;
-    private static final int FINE_RESOLUTION_NEIGHBOR_SPAN = 2;
+    /**
+     * The fine resolution window spans at least this many blocks so that it resolves neighbors better than one block.
+     */
+    private static final int FINE_RESOLUTION_MIN_BLOCKS = 4;
     // Detection states
     private int mOpenCounter = 0;
     private int mCloseCounter = 0;
@@ -79,9 +82,10 @@ public class CTCSSDetector
     // Goertzel coefficients for each target frequency
     private final double[] mCoefficients;
     private final boolean mFineResolution;
-    private final float[] mHistory;      // circular buffer of the most recent audio samples for fine resolution
+    private float[] mHistory;      // circular buffer of the most recent audio samples for fine resolution
     private int mHistoryWriteIndex = 0;
     private int mHistoryCount = 0;
+    private int mLastRefinedIndex = -1;   // tone chosen by the last refinement, to detect a tone change
 
     /**
      * Constructs a CTCSS detector for a specific set of target tones.
@@ -150,6 +154,7 @@ public class CTCSSDetector
 
         if(mFineResolution)
         {
+            ensureHistoryCapacity(samples.length);
             addToHistory(samples);
         }
 
@@ -197,7 +202,21 @@ public class CTCSSDetector
         ctcssMessage.setPowerThreshold(threshold);
         if(maxPower > threshold)
         {
-            int detectedIndex = mFineResolution ? refine(maxIndex, samples.length) : maxIndex;
+            int detectedIndex = maxIndex;
+
+            if(mFineResolution)
+            {
+                //A tone outside the search window of the last refined tone is a different transmitter: drop the
+                //earlier audio so the old tone can't win the refinement
+                if(mLastRefinedIndex >= 0 && Math.abs(mDetectingFrequencies[maxIndex] -
+                        mDetectingFrequencies[mLastRefinedIndex]) > getSearchWindowHz(samples.length))
+                {
+                    keepOnlyLatestBlock(samples.length);
+                }
+
+                detectedIndex = refine(maxIndex, samples.length);
+                mLastRefinedIndex = detectedIndex;
+            }
 
             if(detectedIndex != maxIndex)
             {
@@ -213,6 +232,41 @@ public class CTCSSDetector
         }
 
         return ctcssMessage;
+    }
+
+    /**
+     * Sizes the fine resolution history to at least 2048 samples and at least four blocks, so that refinement works
+     * with any input block size.  Existing history is discarded when the buffer grows.
+     */
+    private void ensureHistoryCapacity(int blockLength)
+    {
+        int required = Math.max(FINE_RESOLUTION_SAMPLES, blockLength * FINE_RESOLUTION_MIN_BLOCKS);
+
+        if(mHistory == null || mHistory.length < required)
+        {
+            mHistory = new float[required];
+            mHistoryWriteIndex = 0;
+            mHistoryCount = 0;
+        }
+    }
+
+    /**
+     * Discards all history except the most recent block, which was just added.
+     */
+    private void keepOnlyLatestBlock(int blockLength)
+    {
+        mHistoryCount = Math.min(mHistoryCount, blockLength);
+    }
+
+    /**
+     * Refinement search window in Hz on either side of the detected tone: one Goertzel bin of the current block
+     * (about 15.6 Hz for a 512 sample block), since the per-block detection can be off by up to about that much.
+     * Neighboring tones are 2.5 - 3.5 Hz apart below 110 Hz and wider above, so a window in Hz covers more tones at
+     * low frequencies and fewer at high frequencies.
+     */
+    private static double getSearchWindowHz(int blockLength)
+    {
+        return RESAMPLED_AUDIO_SAMPLE_RATE / blockLength;
     }
 
     /**
@@ -235,7 +289,7 @@ public class CTCSSDetector
      * Re-evaluates the detected tone against its neighbors over the fine resolution history window.
      * @param detectedIndex of the strongest tone in the current block
      * @param blockLength of the current block
-     * @return index of the strongest tone among the detected tone and its neighbors over the longer window, or the
+     * @return index of the strongest tone within the search window over the longer window, or the
      * detected index when the history doesn't yet extend beyond the current block (e.g. at the start of a call).
      */
     private int refine(int detectedIndex, int blockLength)
@@ -245,14 +299,20 @@ public class CTCSSDetector
             return detectedIndex;
         }
 
-        //Don't refine to the out-of-range sentinel codes at either end of the detecting code array
-        int first = Math.max(1, detectedIndex - FINE_RESOLUTION_NEIGHBOR_SPAN);
-        int last = Math.min(mDetectingCodeArray.length - 2, detectedIndex + FINE_RESOLUTION_NEIGHBOR_SPAN);
+        //Search the tones within one block bin (in Hz) of the detected tone.  Don't refine to the out-of-range
+        //placeholder codes at either end of the detecting code array.
+        double windowHz = getSearchWindowHz(blockLength);
+        double detectedHz = mDetectingFrequencies[detectedIndex];
         int bestIndex = detectedIndex;
         double bestPower = -1;
 
-        for(int i = first; i <= last; i++)
+        for(int i = 1; i < mDetectingCodeArray.length - 1; i++)
         {
+            if(Math.abs(mDetectingFrequencies[i] - detectedHz) > windowHz)
+            {
+                continue;
+            }
+
             double power = goertzelHistory(mCoefficients[i]);
 
             if(power > bestPower)
@@ -443,6 +503,7 @@ public class CTCSSDetector
         mRejectedQualification = 0;
         mHistoryWriteIndex = 0;
         mHistoryCount = 0;
+        mLastRefinedIndex = -1;
     }
 
 }
