@@ -939,6 +939,8 @@ public class DecoderFactory
                     copyNBFM.setSquelchNoiseOpenThreshold(origNBFM.getSquelchNoiseOpenThreshold());
                     copyNBFM.setSquelchNoiseCloseThreshold(origNBFM.getSquelchNoiseCloseThreshold());
                     copyNBFM.setTalkgroup(origNBFM.getTalkgroup());
+                    copyNBFM.setHangTimeMs(origNBFM.getHangTimeMs());
+                    copyNBFM.setHangTimeRemoveSilence(origNBFM.isHangTimeRemoveSilence());
                     return copyNBFM;
                 case NXDN:
                     DecodeConfigNXDN origNXDN = (DecodeConfigNXDN)config;
