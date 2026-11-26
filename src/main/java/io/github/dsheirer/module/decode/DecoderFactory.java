@@ -958,6 +958,8 @@ public class DecoderFactory
                     copyNBFM.setAudioALC(origNBFM.isAudioALC());
                     copyNBFM.setDeemphasis(origNBFM.getDeemphasis());
                     copyNBFM.setCtcssFineResolution(origNBFM.isCtcssFineResolution());
+                    copyNBFM.setHangTimeMs(origNBFM.getHangTimeMs());
+                    copyNBFM.setHangTimeRemoveSilence(origNBFM.isHangTimeRemoveSilence());
 
                     List<SquelchDecoderConfig> copySquelchDecoders = new ArrayList<>();
 
