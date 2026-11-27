@@ -91,6 +91,8 @@ public class P25P1MessageFramer extends C4FMMessageFramer
     private P25P1DataUnitID mPreviousDataUnitID = P25P1DataUnitID.PLACE_HOLDER;
     private P25P1DataUnitID mDetectedDataUnitID = P25P1DataUnitID.PLACE_HOLDER;
     private int mDetectedNAC = 0;
+    //Indicates the detected NAC came from a NAC-assisted (tracked NAC) decode rather than the received NID alone
+    private boolean mDetectedNACAssisted = false;
     private int mDetectedSyncBitErrors = 0;
     private final P25P1ChannelStatusProcessor mChannelStatusProcessor = new P25P1ChannelStatusProcessor();
     private PDUSequence mPDUSequence;
@@ -270,6 +272,7 @@ public class P25P1MessageFramer extends C4FMMessageFramer
             if(mMessageAssemblyRequired)
             {
                 mMessageAssembler = new P25P1MessageAssembler(mDetectedNAC, mDetectedDataUnitID);
+                mMessageAssembler.setNACAssisted(mDetectedNACAssisted);
                 mMessageAssemblyRequired = false;
             }
             else if(mDetectedNAC > 0)
@@ -277,6 +280,8 @@ public class P25P1MessageFramer extends C4FMMessageFramer
                 //Start a placeholder message assembly.  If it completes before another sync detect, throw it away
                 mDetectedDataUnitID = P25P1DataUnitID.PLACE_HOLDER;
                 mMessageAssembler = new P25P1MessageAssembler(mDetectedNAC, mDetectedDataUnitID);
+                //No NID was decoded for a placeholder: its NAC is carried over from the previous NID
+                mMessageAssembler.setNACAssisted(true);
             }
         }
         else if(mDibitCounter >= 4800) //4800x (1-sec).
@@ -669,6 +674,11 @@ public class P25P1MessageFramer extends C4FMMessageFramer
 //        System.out.println("Symbols: " + mDebugSymbolCount);
         if(mRunning && message != null && mMessageListener != null)
         {
+            if(message instanceof P25P1Message p25 && mMessageAssembler != null)
+            {
+                p25.setNACAssisted(mMessageAssembler.isNACAssisted());
+            }
+
             mMessageListener.receive(message);
         }
     }
@@ -687,6 +697,19 @@ public class P25P1MessageFramer extends C4FMMessageFramer
      */
     public void nidDetected(int nac, P25P1DataUnitID dataUnitID, int detectedBitErrors)
     {
+        nidDetected(nac, dataUnitID, detectedBitErrors, false);
+    }
+
+    /**
+     * Processes a detected NID.
+     * @param nac decoded
+     * @param dataUnitID decoded
+     * @param detectedBitErrors corrected
+     * @param nacAssisted true when the NAC came from a decode assisted by the tracked NAC, rather than from the received
+     * NID alone
+     */
+    private void nidDetected(int nac, P25P1DataUnitID dataUnitID, int detectedBitErrors, boolean nacAssisted)
+    {
         mDetectedDataUnitID = dataUnitID;
 
         //If the DUID is UNKNOWN, use the PLACEHOLDER and don't overwrite the previously detected NAC
@@ -698,6 +721,7 @@ public class P25P1MessageFramer extends C4FMMessageFramer
         if(mDetectedDataUnitID != P25P1DataUnitID.PLACE_HOLDER)
         {
             mDetectedNAC = nac;
+            mDetectedNACAssisted = nacAssisted;
         }
 
         mDetectedSyncBitErrors = detectedBitErrors;
@@ -844,6 +868,7 @@ public class P25P1MessageFramer extends C4FMMessageFramer
         int trackedNAC = mNACTracker.getTrackedNAC();
         boolean preemptive = mPreemptiveNIDCheck;
         mPreemptiveNIDCheck = false;
+        boolean assisted = false;
 
         if(preemptive)
         {
@@ -859,7 +884,17 @@ public class P25P1MessageFramer extends C4FMMessageFramer
         }
         else
         {
-            mBCHDecoder.decode(nid, trackedNAC);
+            //Unassisted decode first.  When it fails, overwrite the NAC field with the tracked NAC and try again: a NID
+            //recovered that way carries the tracked NAC whether or not it was transmitted with it, so flag it as
+            //assisted for consumers (e.g. a NAC filter) that need the transmitted NAC.
+            mBCHDecoder.decode(nid);
+
+            if(nid.getCorrectedBitCount() < 0 && trackedNAC > 0 && nid.getInt(NAC_FIELD) != trackedNAC)
+            {
+                nid.setInt(trackedNAC, NAC_FIELD);
+                mBCHDecoder.decode(nid);
+                assisted = true;
+            }
         }
 
         int nac = nid.getInt(NAC_FIELD);
@@ -889,7 +924,7 @@ public class P25P1MessageFramer extends C4FMMessageFramer
             return false;
         }
 //        System.out.println("\t\t" + mDebugSymbolCount + " VALID NID - NAC:" + nac + " DUID:" + duid);
-        nidDetected(nac, duid, nid.getCorrectedBitCount());
+        nidDetected(nac, duid, nid.getCorrectedBitCount(), assisted);
         return true;
     }
 
@@ -997,7 +1032,7 @@ public class P25P1MessageFramer extends C4FMMessageFramer
             return false;
         }
 
-        nidDetected(trackedNAC, P25P1DataUnitID.fromValue(SOFT_NID_CANDIDATE_DUIDS[bestIndex]), bestBitErrors);
+        nidDetected(trackedNAC, P25P1DataUnitID.fromValue(SOFT_NID_CANDIDATE_DUIDS[bestIndex]), bestBitErrors, true);
         return true;
     }
 
