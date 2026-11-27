@@ -28,6 +28,7 @@ import io.github.dsheirer.playlist.PlaylistManager;
 public class ThinlineRadioCoreEditor extends RdioScannerEditor
 {
     private static final String SUMMARY = "Uses the site key from User Preferences. Calls stay on this site until ThinLine asks for one.";
+    private static final String UPLOAD_PATH = "/api/call-upload";
     private static final String MISSING_KEY = "Open User Preferences → Thinline Radio and enter the site key before enabling this stream.";
 
     public ThinlineRadioCoreEditor(PlaylistManager playlistManager)
@@ -56,29 +57,35 @@ public class ThinlineRadioCoreEditor extends RdioScannerEditor
     @Override
     public void setItem(io.github.dsheirer.audio.broadcast.rdioscanner.RdioScannerConfiguration item)
     {
-        super.setItem(item);
-        boolean ready = hasSiteKey();
+        //A new stream has the default localhost host: fill in the Thinline Radio URL from User Preferences on the
+        //stream configuration itself, before the fields are loaded.  Changing only the displayed host (and then
+        //clearing the modified flag) made the streaming editor reload the stream, which reloaded the stored localhost
+        //host and repeated until the stack overflowed.
         if(item != null)
         {
-            getEnabledSwitch().setDisable(!ready);
-            if(!ready)
-            {
-                // Leave a clear reason in the name tooltip path via disabled switch; log once is enough in UI later.
-            }
             String preferenceUrl = getPlaylistManager().getSettings().getThinlineRadioPreference().getUrl();
-            String host = getHostTextField().getText();
+            String host = item.getHost();
+
             if(preferenceUrl != null && !preferenceUrl.isBlank() &&
                 (host == null || host.isBlank() || host.startsWith("http://localhost")))
             {
-                String shown = preferenceUrl;
-                String uploadPath = "/api/call-upload";
-                if(shown.endsWith(uploadPath))
+                String base = preferenceUrl.trim();
+
+                if(base.endsWith(UPLOAD_PATH))
                 {
-                    shown = shown.substring(0, shown.length() - uploadPath.length());
+                    base = base.substring(0, base.length() - UPLOAD_PATH.length());
                 }
-                getHostTextField().setText(shown);
-                modifiedProperty().set(false);
+
+                item.setHost(base + UPLOAD_PATH);
             }
+        }
+
+        super.setItem(item);
+
+        if(item != null)
+        {
+            //Enable the stream only after the site key is entered in User Preferences
+            getEnabledSwitch().setDisable(!hasSiteKey());
         }
     }
 }
